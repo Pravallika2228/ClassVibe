@@ -20,78 +20,71 @@ const groupSchema = new mongoose.Schema({
     required: true             // Every group must have an admin
   },
   
-  // ✅ UPDATED: Array of members with joinedAt timestamp
-  // Each member is now an object containing user reference and join date
+  // ✅ EXISTING: Array of members with joinedAt timestamp
   members: [{
     user: {
-      type: mongoose.Schema.Types.ObjectId,  // References User documents
-      ref: 'User',             // References the User model
-      required: true           // User ID is required
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true
     },
     joinedAt: {
-      type: Date,              // When this user joined
-      default: Date.now        // Automatically set to current time
+      type: Date,
+      default: Date.now
     }
   }],
   
   // Unique PIN for joining the group
-  // 6-digit number for easy joining
   pin: {
-    type: String,              // Data type is string (to keep leading zeros)
-    required: true,            // This field is mandatory
-    unique: true,              // Each group has unique PIN
-    length: 6                  // Exactly 6 digits
+    type: String,
+    required: true,
+    unique: true,
+    length: 6
   },
   
   // QR Code data (base64 encoded image)
-  // When users scan this, they can join the group
   qrCode: {
-    type: String,              // Data type is string (base64 image data)
-    required: true             // This field is mandatory
+    type: String,
+    required: true
   },
   
   // Session status - is the group currently active?
   isActive: {
-    type: Boolean,             // Data type is true/false
-    default: true              // By default, new groups are active
+    type: Boolean,
+    default: true
   },
   
   // When the session was ended (if ended)
   endedAt: {
-    type: Date,                // Data type is date/time
-    default: null              // By default, no end time (still active)
+    type: Date,
+    default: null
   },
   
   // List of users currently online in this group
-  // This helps show "who's online" status
   onlineUsers: [{
-    type: mongoose.Schema.Types.ObjectId,  // References User documents
-    ref: 'User'                // References the User model
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  
+  // ⭐ NEW: Email whitelist (optional - backward compatible)
+  allowedEmails: [{
+    type: String,
+    lowercase: true,
+    trim: true
   }]
   
 }, {
-  // Automatically add createdAt and updatedAt timestamps
   timestamps: true
 });
 
-// INDEX: Speed up searches by PIN
-// When someone joins with PIN, MongoDB can find it quickly
+// INDEXES
 groupSchema.index({ pin: 1 });
-
-// INDEX: Speed up searches by admin
-// To quickly find all groups created by a specific user
 groupSchema.index({ admin: 1 });
-
-// INDEX: Speed up searches for active sessions
-// To quickly find all currently active groups
 groupSchema.index({ isActive: 1 });
-
-// INDEX: Speed up searches by member user ID
 groupSchema.index({ 'members.user': 1 });
+groupSchema.index({ allowedEmails: 1 });
 
-// ✅ UPDATED METHOD: Check if a user is a member of this group
+// ✅ EXISTING METHODS - UNCHANGED
 groupSchema.methods.isMember = function(userId) {
-  // Convert userId to string and check if it exists in members array
   const userIdStr = userId.toString();
   return this.members.some(member => {
     const memberUserId = member.user?._id?.toString() || member.user?.toString();
@@ -99,29 +92,22 @@ groupSchema.methods.isMember = function(userId) {
   });
 };
 
-// METHOD: Check if a user is the admin of this group
 groupSchema.methods.isAdmin = function(userId) {
-  // Compare the admin ID with the provided userId
   const adminId = this.admin._id?.toString() || this.admin.toString();
   const userIdStr = userId.toString();
   return adminId === userIdStr;
 };
 
-// ✅ UPDATED METHOD: Add a user to the group with joinedAt timestamp
 groupSchema.methods.addMember = async function(userId) {
-  // Check if user is already a member
   if (!this.isMember(userId)) {
-    // Add user to members array with current timestamp
     this.members.push({
       user: userId,
       joinedAt: new Date()
     });
-    // Save the updated group to database
     await this.save();
   }
 };
 
-// ✅ NEW METHOD: Get joinedAt date for a specific user
 groupSchema.methods.getJoinedAt = function(userId) {
   const userIdStr = userId.toString();
   const member = this.members.find(member => {
@@ -131,19 +117,36 @@ groupSchema.methods.getJoinedAt = function(userId) {
   return member ? member.joinedAt : null;
 };
 
-// METHOD: End the session
 groupSchema.methods.endSession = async function() {
-  // Mark session as inactive
   this.isActive = false;
-  // Set the ended time to now
   this.endedAt = new Date();
-  // Save the updated group to database
   await this.save();
 };
 
-// Create the Group model from the schema
-// 'Group' is the model name, MongoDB will create a 'groups' collection
-const Group = mongoose.model('Group', groupSchema);
+// ⭐ NEW METHODS
+groupSchema.methods.isEmailAllowed = function(email) {
+  if (!this.allowedEmails || this.allowedEmails.length === 0) {
+    return true;
+  }
+  return this.allowedEmails.includes(email.toLowerCase().trim());
+};
 
-// Export the Group model so we can use it in other files
-module.exports = Group;
+groupSchema.methods.addAllowedEmail = function(email) {
+  const normalizedEmail = email.toLowerCase().trim();
+  if (!this.allowedEmails) {
+    this.allowedEmails = [];
+  }
+  if (!this.allowedEmails.includes(normalizedEmail)) {
+    this.allowedEmails.push(normalizedEmail);
+  }
+};
+
+groupSchema.methods.removeAllowedEmail = function(email) {
+  if (this.allowedEmails) {
+    this.allowedEmails = this.allowedEmails.filter(
+      e => e !== email.toLowerCase().trim()
+    );
+  }
+};
+
+module.exports = mongoose.model('Group', groupSchema);

@@ -13,6 +13,9 @@ const crypto = require('crypto');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+// After: const Message = require('./models/Message');
+// ADD THIS:
+const ScheduledSession = require('./models/ScheduledSession');  // ⭐ NEW
 
 const connectDB = require('./config/db');
 const User = require('./models/User');
@@ -41,12 +44,59 @@ const io = new Server(server, {
   transports: ["websocket", "polling"]
 });
 
-app.set('io', io);
+app.set('io', io); 
 global.io = io;
 
 app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
+
+// After other route imports
+const quizRoutes = require('./routes/quiz');
+
+// After other routes
+app.use('/api/quiz', quizRoutes);
+
+// Import
+const analyticsRoutes = require('./routes/analytics');
+
+// Use
+app.use('/api/analytics', analyticsRoutes);
+
+// Add tracking in socket events (copy from guide)
+
+// ============================================
+// ROUTE IMPORTS (Add at top with other imports)
+// ============================================
+const quizRoutes = require('./routes/quiz');                    // ⭐ ADD THIS
+const analyticsRoutes = require('./routes/analytics');          // ⭐ ADD THIS
+const notificationRoutes = require('./routes/notifications');   // ⭐ ADD THIS
+const { startSessionReminderJob } = require('./jobs/sessionReminder');
+
+// ============================================
+// USE ROUTES (Add after other app.use routes)
+// ============================================
+app.use('/api/quiz', quizRoutes);                   // ⭐ ADD THIS
+app.use('/api/analytics', analyticsRoutes);         // ⭐ ADD THIS
+app.use('/api/notifications', notificationRoutes);  // ⭐ ADD THIS
+
+// ============================================
+// START JOBS (Add after server starts)
+// ============================================
+
+// After io.listen() or server.listen(), add:
+
+// Start session reminder job (optional - controlled by env variable)
+if (process.env.ENABLE_SESSION_REMINDERS !== 'false') {
+  const reminderJobId = startSessionReminderJob();
+  
+  // Store job ID for cleanup on shutdown
+  process.reminderJobId = reminderJobId;
+  
+  console.log('✅ Session reminder job is running');
+} else {
+  console.log('⏸️ Session reminder job is disabled');
+}
 
 // ============================================
 // MIDDLEWARE
@@ -332,6 +382,18 @@ app.use((error, req, res, next) => {
   }
   next();
 });
+  // Find this section:
+  // ------------------
+  // MESSAGE ROUTES
+  // ------------------
+
+  // BEFORE that section, ADD:
+
+  // ------------------
+  // SCHEDULE ROUTES
+  // ------------------
+  const scheduleRoutes = require('./routes/schedule');
+  app.use('/api/schedule', scheduleRoutes);
 
 // ------------------
 // GROUP ROUTES
@@ -471,6 +533,32 @@ app.post('/api/groups/join', optionalAuth, async (req, res) => {
           }
         });
       }
+      // Find: const group = await Group.findOne({ pin: cleanPin, isActive: true });
+
+      // RIGHT AFTER finding the group and BEFORE checking if user is member, ADD:
+
+          // ⭐ NEW: Check email whitelist
+          if (group.allowedEmails && group.allowedEmails.length > 0) {
+            let userEmail;
+            
+            if (req.userId) {
+              // Authenticated user
+              const user = await User.findById(req.userId);
+              userEmail = user.email;
+            } else {
+              // Guest user
+              userEmail = email;
+            }
+            
+            if (!group.isEmailAllowed(userEmail)) {
+              console.log('❌ Join failed: Email not authorized');
+              return res.status(403).json({ 
+                error: 'Your email is not authorized for this session. Please contact the teacher.' 
+              });
+            }
+            
+            console.log('✅ Email authorized:', userEmail);
+          }
       
       // Add as member
       console.log('➕ Adding user to group');
@@ -871,6 +959,64 @@ io.on('connection', (socket) => {
       socket.emit('error', { error: 'Failed to send message' });
     }
   });
+  // Find: socket.on('sendMessage', async (data) => { ... });
+
+  // AFTER the entire sendMessage handler, ADD:
+
+    // ⭐ NEW: POLL VOTING
+    socket.on('votePoll', async (data) => {
+      try {
+        if (!socket.userId) {
+          return socket.emit('error', { error: 'Not authenticated' });
+        }
+        
+        const { messageId, optionIndex, groupId } = data;
+        
+        // Find the poll message
+        const message = await Message.findById(messageId);
+        if (!message) {
+          return socket.emit('error', { error: 'Poll not found' });
+        }
+        
+        // Check if user is in the group
+        const group = await Group.findById(groupId || message.group);
+        if (!group || !group.isMember(socket.userId)) {
+          return socket.emit('error', { error: 'Access denied' });
+        }
+        
+        // Check if poll options exist
+        if (!message.pollOptions || !message.pollOptions[optionIndex]) {
+          return socket.emit('error', { error: 'Invalid poll option' });
+        }
+        
+        // Remove previous vote if exists
+        message.pollOptions.forEach(option => {
+          if (!option.votes) option.votes = [];
+          option.votes = option.votes.filter(
+            voterId => voterId.toString() !== socket.userId.toString()
+          );
+        });
+        
+        // Add new vote
+        if (!message.pollOptions[optionIndex].votes) {
+          message.pollOptions[optionIndex].votes = [];
+        }
+        message.pollOptions[optionIndex].votes.push(socket.userId);
+        
+        // Save updated poll
+        await message.save();
+        await message.populate('sender', 'username name');
+        
+        // Broadcast updated poll to all group members
+        io.to(message.group.toString()).emit('pollUpdated', message);
+        
+        console.log(`✅ User ${socket.userId} voted on poll ${messageId}`);
+        
+      } catch (error) {
+        console.error('Vote poll error:', error);
+        socket.emit('error', { error: 'Failed to vote' });
+      }
+    });
   
   // EDIT MESSAGE
   socket.on('editMessage', async (data) => {
@@ -1008,3 +1154,24 @@ mongoose.connect(process.env.MONGODB_URI)
     console.error("❌ MongoDB connection failed", err);
     process.exit(1);
   });
+
+// ============================================
+// GRACEFUL SHUTDOWN (Add at bottom of file)
+// ============================================
+
+// Clean up jobs on server shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  
+  // Stop reminder job
+  if (process.reminderJobId) {
+    const { stopSessionReminderJob } = require('./jobs/sessionReminder');
+    stopSessionReminderJob(process.reminderJobId);
+  }
+  
+  // Close server
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+});

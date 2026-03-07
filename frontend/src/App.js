@@ -10,6 +10,9 @@ import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import MessageInput from './components/MessageInput';
+// ⭐ NEW IMPORTS - Quiz & Analytics
+import QuizCreator from './components/QuizCreator';
+import StudentAnalytics from './components/StudentAnalytics';
 import './App.css';
 
 function App() {
@@ -21,6 +24,10 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  
+  // ⭐ NEW STATE - Quiz & Analytics
+  const [showQuizCreator, setShowQuizCreator] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   const getUserId = (u) => u?.id ?? u?._id ?? u?.userId ?? null;
 
@@ -126,6 +133,29 @@ function App() {
       );
     });
 
+    // ⭐ NEW - Quiz Socket Events
+    socket.on('quizStarted', (data) => {
+      console.log('🎮 Quiz started:', data);
+      alert(`Quiz started: ${data.quizTitle}!\nJoin now to participate!`);
+      // Optionally: Show "Join Quiz" button or modal
+    });
+
+    socket.on('nextQuestion', (data) => {
+      console.log('➡️ Next question:', data);
+      // Handle moving to next question in quiz
+    });
+
+    socket.on('quizEnded', (data) => {
+      console.log('🏁 Quiz ended:', data);
+      alert('Quiz has ended! Check your results.');
+      // Show final leaderboard
+    });
+
+    socket.on('leaderboardUpdate', (data) => {
+      console.log('📊 Leaderboard updated:', data);
+      // Update rankings in real-time
+    });
+
     return () => {
       socket.off('newMessage');
       socket.off('userJoined');
@@ -135,6 +165,11 @@ function App() {
       socket.off('sessionEnded');
       socket.off('messageEdited');
       socket.off('messageDeleted');
+      // ⭐ Clean up quiz events
+      socket.off('quizStarted');
+      socket.off('nextQuestion');
+      socket.off('quizEnded');
+      socket.off('leaderboardUpdate');
     };
   }, [isAuthenticated, currentGroup, loadGroups, user]);
 
@@ -177,7 +212,6 @@ function App() {
     }
   };
 
-  // ✅ UPDATED: Handle poll messages
   const handleSendMessage = (messageData) => {
     if (!currentGroup) return;
     const payload = {
@@ -190,7 +224,6 @@ function App() {
       fileSize: messageData.fileSize || null,
       fileType: messageData.fileType || null
     };
-    // ✅ Add poll options if poll message
     if (messageData.messageType === 'poll' && messageData.pollOptions) {
       payload.pollOptions = messageData.pollOptions;
     }
@@ -414,10 +447,14 @@ function App() {
         onEndSession={handleEndSession}
         onLeaveMeeting={handleLeaveMeeting}
         onCreateGroup={handleCreateGroup}
+        onOpenSchedule={() => {/* TODO: Add schedule modal */}}
+        onOpenQuiz={() => setShowQuizCreator(true)}        // ⭐ NEW
+        onOpenAnalytics={() => setShowAnalytics(true)}     // ⭐ NEW
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         isAdmin={isAdmin}
         groupName={currentGroup ? currentGroup.groupName : ''}
         userRole={user?.role}
+        socket={socket}                                    // ⭐ NEW - Pass socket for notifications
       />
 
       <Sidebar
@@ -428,6 +465,26 @@ function App() {
         currentUserId={getUserId(user)}
         onGroupJoined={(g) => handleGroupJoined(g)}
       />
+
+      {/* ⭐ NEW - Quiz Creator Modal */}
+      {showQuizCreator && (
+        <QuizCreator
+          groupId={currentGroup?._id}
+          onClose={() => setShowQuizCreator(false)}
+          onSuccess={() => {
+            setShowQuizCreator(false);
+            alert('✅ Quiz created successfully!');
+          }}
+        />
+      )}
+
+      {/* ⭐ NEW - Analytics Modal */}
+      {showAnalytics && (
+        <StudentAnalytics
+          groupId={currentGroup?._id}
+          onClose={() => setShowAnalytics(false)}
+        />
+      )}
 
       <div className="main-content">
         {!currentGroup ? (

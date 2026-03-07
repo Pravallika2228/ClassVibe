@@ -1,60 +1,143 @@
 // src/components/Header.jsx
 import React from "react";
+import NotificationBell from './NotificationBell';
 
-const Header = ({ 
-  onEndSession, 
+const Header = ({
+  onEndSession,
   onLeaveMeeting,
   onCreateGroup,
-  onToggleSidebar, 
-  isAdmin, 
+  onOpenSchedule,
+  onOpenQuiz,           // ⭐ NEW - Quiz button
+  onOpenAnalytics,      // ⭐ NEW - Analytics button
+  onToggleSidebar,
+  isAdmin,
   groupName,
   userRole,
-  onBack 
+  onBack,
+  socket,               // ⭐ NEW - For notifications
 }) => {
   return (
     <header style={styles.header}>
       <div style={styles.left}>
         <div style={styles.titleWrap}>
           <h2 style={styles.title}>ClassVibe</h2>
+
           {onBack && (
             <button onClick={onBack} style={styles.backBtn}>
               Back to Home
             </button>
           )}
-          {groupName && <span style={styles.groupName}> — {groupName}</span>}
+
+          {groupName && (
+            <span style={styles.groupName}>— {groupName}</span>
+          )}
         </div>
       </div>
+
       <div style={styles.right}>
-        {!groupName && userRole === 'teacher' && onCreateGroup && (
-          <button
-            onClick={onCreateGroup}
-            style={styles.createButton}
-            onMouseEnter={(e) => (e.target.style.backgroundColor = "#128C7E")}
-            onMouseLeave={(e) => (e.target.style.backgroundColor = "#25D366")}
-          >
-            + Create New Chat
-          </button>
+        {/* ⭐ TEACHER BUTTONS (when not in a group) */}
+        {!groupName && userRole === "teacher" && (
+          <>
+            {onCreateGroup && (
+              <button
+                onClick={onCreateGroup}
+                style={styles.createButton}
+                onMouseEnter={(e) =>
+                  (e.target.style.backgroundColor = "#128C7E")
+                }
+                onMouseLeave={(e) =>
+                  (e.target.style.backgroundColor = "#25D366")
+                }
+              >
+                + Create Instant
+              </button>
+            )}
+
+            {onOpenSchedule && (
+              <button
+                onClick={onOpenSchedule}
+                style={styles.scheduleButton}
+                onMouseEnter={(e) =>
+                  (e.target.style.backgroundColor = "#0f7168")
+                }
+                onMouseLeave={(e) =>
+                  (e.target.style.backgroundColor = "#128C7E")
+                }
+              >
+                📅 Schedule
+              </button>
+            )}
+
+            {/* ⭐ NEW - Quiz Button */}
+            {onOpenQuiz && (
+              <button
+                onClick={onOpenQuiz}
+                style={styles.quizButton}
+                onMouseEnter={(e) =>
+                  (e.target.style.backgroundColor = "#7B1FA2")
+                }
+                onMouseLeave={(e) =>
+                  (e.target.style.backgroundColor = "#9C27B0")
+                }
+              >
+                🎮 Create Quiz
+              </button>
+            )}
+
+            {/* ⭐ NEW - Analytics Button */}
+            {onOpenAnalytics && (
+              <button
+                onClick={onOpenAnalytics}
+                style={styles.analyticsButton}
+                onMouseEnter={(e) =>
+                  (e.target.style.backgroundColor = "#e68900")
+                }
+                onMouseLeave={(e) =>
+                  (e.target.style.backgroundColor = "#FFA500")
+                }
+              >
+                📊 Analytics
+              </button>
+            )}
+          </>
         )}
+
+        {/* Admin session controls */}
         {isAdmin && groupName && (
           <button
             onClick={onEndSession}
             style={styles.endButton}
-            onMouseEnter={(e) => (e.target.style.backgroundColor = "#c82333")}
-            onMouseLeave={(e) => (e.target.style.backgroundColor = "#dc3545")}
+            onMouseEnter={(e) =>
+              (e.target.style.backgroundColor = "#c82333")
+            }
+            onMouseLeave={(e) =>
+              (e.target.style.backgroundColor = "#dc3545")
+            }
           >
             End Session
           </button>
         )}
+
+        {/* Student leave button */}
         {!isAdmin && onLeaveMeeting && groupName && (
           <button
             onClick={onLeaveMeeting}
             style={styles.leaveButton}
-            onMouseEnter={(e) => (e.target.style.backgroundColor = "#e68900")}
-            onMouseLeave={(e) => (e.target.style.backgroundColor = "#ff9800")}
+            onMouseEnter={(e) =>
+              (e.target.style.backgroundColor = "#e68900")
+            }
+            onMouseLeave={(e) =>
+              (e.target.style.backgroundColor = "#ff9800")
+            }
           >
             Leave Meeting
           </button>
         )}
+
+        {/* ⭐ NEW - Notification Bell */}
+        {socket && <NotificationBell socket={socket} />}
+
+        {/* Menu button */}
         <button onClick={onToggleSidebar} style={styles.menuButton}>
           <div style={styles.menuLine} />
           <div style={styles.menuLine} />
@@ -102,10 +185,8 @@ const styles = {
     cursor: "pointer",
     fontWeight: 600,
     fontSize: "13px",
-    transition: "background-color 0.2s",
   },
   groupName: {
-    marginLeft: 6,
     fontSize: "14px",
     color: "#DCF8C6",
     fontStyle: "italic",
@@ -121,6 +202,41 @@ const styles = {
     fontSize: "14px",
     fontWeight: 700,
     backgroundColor: "#25D366",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    transition: "background-color 0.2s",
+  },
+  scheduleButton: {
+    padding: "8px 14px",
+    fontSize: "14px",
+    fontWeight: 700,
+    backgroundColor: "#128C7E",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    transition: "background-color 0.2s",
+  },
+  // ⭐ NEW - Quiz Button Style
+  quizButton: {
+    padding: "8px 14px",
+    fontSize: "14px",
+    fontWeight: 700,
+    backgroundColor: "#9C27B0",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    transition: "background-color 0.2s",
+  },
+  // ⭐ NEW - Analytics Button Style
+  analyticsButton: {
+    padding: "8px 14px",
+    fontSize: "14px",
+    fontWeight: 700,
+    backgroundColor: "#FFA500",
     color: "white",
     border: "none",
     borderRadius: "6px",
@@ -155,11 +271,9 @@ const styles = {
     justifyContent: "space-around",
     width: "36px",
     height: "30px",
-    padding: "4px",
     backgroundColor: "transparent",
     border: "none",
     cursor: "pointer",
-    borderRadius: "6px",
   },
   menuLine: {
     width: "100%",
