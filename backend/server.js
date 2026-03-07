@@ -65,6 +65,21 @@ app.use('/api/analytics', analyticsRoutes);
 
 // Add tracking in socket events (copy from guide)
 
+const cors = require("cors");
+
+app.use(
+  cors({
+    origin: [
+      "https://classvibe.vercel.app",
+      "http://localhost:3000"
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
+  })
+);
+
+app.options("*", cors());
+
 // ============================================
 // ROUTE IMPORTS (Add at top with other imports)
 // ============================================
