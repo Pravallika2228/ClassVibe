@@ -599,7 +599,7 @@ function App() {
                               <div className="info-row teacher-info">
                                 <span className="info-icon">👨‍🏫</span>
                                 <span className="info-label">Teacher:</span>
-                                <span className="info-value teacher-name">{teacherName}</span>
+                                <span className="info-value">{(group.members || []).length}</span>
                               </div>
                               <div className="info-row">
                                 <span className="info-icon">👥</span>
