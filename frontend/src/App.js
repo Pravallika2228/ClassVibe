@@ -11,9 +11,14 @@ import Sidebar from './components/Sidebar';
 import ChatArea from './components/ChatArea';
 import MessageInput from './components/MessageInput';
 // ⭐ NEW IMPORTS - Quiz & Analytics
+import ScheduleSession from './components/ScheduleSession';  // ⭐ ADD THIS
+import FloatingQuizButton from './components/FloatingQuizButton';  // ⭐ ADD THIS
 import QuizCreator from './components/QuizCreator';
 import StudentAnalytics from './components/StudentAnalytics';
 import './App.css';
+import QuizHost from './components/QuizHost';          // ⭐ ADD
+import QuizWaitingRoom from './components/QuizWaitingRoom';  // ⭐ ADD
+import QuizPlayer from './components/QuizPlayer';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -28,6 +33,8 @@ function App() {
   // ⭐ NEW STATE - Quiz & Analytics
   const [showQuizCreator, setShowQuizCreator] = useState(false);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);  // ⭐ ADD THIS
+  const [activeQuizSession, setActiveQuizSession] = useState(null);  // ⭐ ADD
 
   const getUserId = (u) => u?.id ?? u?._id ?? u?.userId ?? null;
 
@@ -447,7 +454,7 @@ function App() {
         onEndSession={handleEndSession}
         onLeaveMeeting={handleLeaveMeeting}
         onCreateGroup={handleCreateGroup}
-        onOpenSchedule={() => {/* TODO: Add schedule modal */}}
+        onOpenSchedule={() => setShowSchedule(true)}  // ⭐ CHANGED
         onOpenQuiz={() => setShowQuizCreator(true)}        // ⭐ NEW
         onOpenAnalytics={() => setShowAnalytics(true)}     // ⭐ NEW
         onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -483,6 +490,68 @@ function App() {
         <StudentAnalytics
           groupId={currentGroup?._id}
           onClose={() => setShowAnalytics(false)}
+        />
+      )}
+      {/* ⭐ NEW - Schedule Modal */}
+      {showSchedule && (
+        <ScheduleSession
+          onClose={() => setShowSchedule(false)}
+          onSuccess={() => {
+            setShowSchedule(false);
+            alert('✅ Session scheduled successfully!');
+          }}
+        />
+      )}
+
+      {/* ⭐ NEW - Floating Quiz Button (in session only) */}
+      {currentGroup && (
+        <FloatingQuizButton
+          groupId={currentGroup._id}
+          isTeacher={user?.role === 'teacher'}
+
+          // ⭐ UPDATED
+          onCreateQuiz={(session) => {
+            if (session) {
+              // Quiz already exists → open host panel
+              setActiveQuizSession(session);
+            } else {
+              // Create new quiz
+              setShowQuizCreator(true);
+            }
+          }}
+
+          // ⭐ UPDATED
+          onJoinQuiz={(session) => {
+            setActiveQuizSession(session);
+          }}
+
+          socket={socket}
+        />
+      )}
+      {/* ⭐ Quiz Host Panel (Teacher) */}
+      {activeQuizSession && user?.role === 'teacher' && (
+        <QuizHost
+          quiz={activeQuizSession.quiz}
+          session={activeQuizSession}
+          onClose={() => setActiveQuizSession(null)}
+          socket={socket}
+        />
+      )}
+
+      {/* ⭐ Quiz Waiting Room (Student) */}
+      {activeQuizSession && user?.role === 'student' && activeQuizSession.status === 'waiting' && (
+        <QuizWaitingRoom
+          session={activeQuizSession}
+          onClose={() => setActiveQuizSession(null)}
+          socket={socket}
+        />
+      )}
+
+      {/* ⭐ Quiz Player (Student - Active Quiz) */}
+      {activeQuizSession && user?.role === 'student' && activeQuizSession.status === 'active' && (
+        <QuizPlayer
+          sessionId={activeQuizSession._id}
+          onClose={() => setActiveQuizSession(null)}
         />
       )}
 
@@ -599,7 +668,7 @@ function App() {
                               <div className="info-row teacher-info">
                                 <span className="info-icon">👨‍🏫</span>
                                 <span className="info-label">Teacher:</span>
-                                <span className="info-value">{(group.members || []).length}</span>
+                                <span className="info-value teacher-name">{teacherName}</span>
                               </div>
                               <div className="info-row">
                                 <span className="info-icon">👥</span>

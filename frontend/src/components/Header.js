@@ -7,14 +7,14 @@ const Header = ({
   onLeaveMeeting,
   onCreateGroup,
   onOpenSchedule,
-  onOpenQuiz,           // ⭐ NEW - Quiz button
-  onOpenAnalytics,      // ⭐ NEW - Analytics button
+  onOpenQuiz,
+  onOpenAnalytics,
   onToggleSidebar,
   isAdmin,
   groupName,
   userRole,
   onBack,
-  socket,               // ⭐ NEW - For notifications
+  socket,
 }) => {
   return (
     <header style={styles.header}>
@@ -35,66 +35,52 @@ const Header = ({
       </div>
 
       <div style={styles.right}>
-        {/* ⭐ TEACHER BUTTONS (when not in a group) */}
-        {!groupName && userRole === "teacher" && (
+        {/* ⭐ TEACHER BUTTONS - Smart visibility */}
+        {userRole === "teacher" && (
           <>
-            {onCreateGroup && (
+            {/* Create Instant - ONLY when NOT in session */}
+            {!groupName && onCreateGroup && (
               <button
                 onClick={onCreateGroup}
                 style={styles.createButton}
-                onMouseEnter={(e) =>
-                  (e.target.style.backgroundColor = "#128C7E")
-                }
-                onMouseLeave={(e) =>
-                  (e.target.style.backgroundColor = "#25D366")
-                }
+                onMouseEnter={(e) => (e.target.style.backgroundColor = "#128C7E")}
+                onMouseLeave={(e) => (e.target.style.backgroundColor = "#25D366")}
               >
                 + Create Instant
               </button>
             )}
 
+            {/* Schedule - ALWAYS visible for teachers */}
             {onOpenSchedule && (
               <button
                 onClick={onOpenSchedule}
                 style={styles.scheduleButton}
-                onMouseEnter={(e) =>
-                  (e.target.style.backgroundColor = "#0f7168")
-                }
-                onMouseLeave={(e) =>
-                  (e.target.style.backgroundColor = "#128C7E")
-                }
+                onMouseEnter={(e) => (e.target.style.backgroundColor = "#0f7168")}
+                onMouseLeave={(e) => (e.target.style.backgroundColor = "#128C7E")}
               >
                 📅 Schedule
               </button>
             )}
 
-            {/* ⭐ NEW - Quiz Button */}
-            {onOpenQuiz && (
+            {/* Quiz - ONLY when NOT in session (FloatingButton handles in-session) */}
+            {!groupName && onOpenQuiz && (
               <button
                 onClick={onOpenQuiz}
                 style={styles.quizButton}
-                onMouseEnter={(e) =>
-                  (e.target.style.backgroundColor = "#7B1FA2")
-                }
-                onMouseLeave={(e) =>
-                  (e.target.style.backgroundColor = "#9C27B0")
-                }
+                onMouseEnter={(e) => (e.target.style.backgroundColor = "#7B1FA2")}
+                onMouseLeave={(e) => (e.target.style.backgroundColor = "#9C27B0")}
               >
                 🎮 Create Quiz
               </button>
             )}
 
-            {/* ⭐ NEW - Analytics Button */}
-            {onOpenAnalytics && (
+            {/* Analytics - ONLY when IN a session */}
+            {groupName && onOpenAnalytics && (
               <button
                 onClick={onOpenAnalytics}
                 style={styles.analyticsButton}
-                onMouseEnter={(e) =>
-                  (e.target.style.backgroundColor = "#e68900")
-                }
-                onMouseLeave={(e) =>
-                  (e.target.style.backgroundColor = "#FFA500")
-                }
+                onMouseEnter={(e) => (e.target.style.backgroundColor = "#e68900")}
+                onMouseLeave={(e) => (e.target.style.backgroundColor = "#FFA500")}
               >
                 📊 Analytics
               </button>
@@ -107,12 +93,8 @@ const Header = ({
           <button
             onClick={onEndSession}
             style={styles.endButton}
-            onMouseEnter={(e) =>
-              (e.target.style.backgroundColor = "#c82333")
-            }
-            onMouseLeave={(e) =>
-              (e.target.style.backgroundColor = "#dc3545")
-            }
+            onMouseEnter={(e) => (e.target.style.backgroundColor = "#c82333")}
+            onMouseLeave={(e) => (e.target.style.backgroundColor = "#dc3545")}
           >
             End Session
           </button>
@@ -123,18 +105,14 @@ const Header = ({
           <button
             onClick={onLeaveMeeting}
             style={styles.leaveButton}
-            onMouseEnter={(e) =>
-              (e.target.style.backgroundColor = "#e68900")
-            }
-            onMouseLeave={(e) =>
-              (e.target.style.backgroundColor = "#ff9800")
-            }
+            onMouseEnter={(e) => (e.target.style.backgroundColor = "#e68900")}
+            onMouseLeave={(e) => (e.target.style.backgroundColor = "#ff9800")}
           >
             Leave Meeting
           </button>
         )}
 
-        {/* ⭐ NEW - Notification Bell */}
+        {/* Notification Bell */}
         {socket && <NotificationBell socket={socket} />}
 
         {/* Menu button */}
@@ -219,7 +197,6 @@ const styles = {
     cursor: "pointer",
     transition: "background-color 0.2s",
   },
-  // ⭐ NEW - Quiz Button Style
   quizButton: {
     padding: "8px 14px",
     fontSize: "14px",
@@ -231,7 +208,6 @@ const styles = {
     cursor: "pointer",
     transition: "background-color 0.2s",
   },
-  // ⭐ NEW - Analytics Button Style
   analyticsButton: {
     padding: "8px 14px",
     fontSize: "14px",
