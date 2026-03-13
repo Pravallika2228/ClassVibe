@@ -503,8 +503,8 @@ function App() {
         />
       )}
 
-      {/* ⭐ NEW - Floating Quiz Button (in session only) */}
-      {currentGroup && (
+      {/* ⭐ NEW - Floating Quiz Button (in ACTIVE session only) */}
+      {currentGroup && currentGroup.isActive && (
         <FloatingQuizButton
           groupId={currentGroup._id}
           isTeacher={user?.role === 'teacher'}
@@ -643,6 +643,24 @@ function App() {
                   <h2>Welcome, {displayName}! 👋</h2>
                   <p className="dashboard-subtitle">Your joined classrooms</p>
                 </div>
+                    {/* ⭐ ADD THIS BUTTON */}
+                    <div style={{ textAlign: 'center', margin: '20px 0' }}>
+                      <button 
+                        onClick={() => alert('Upcoming sessions feature - coming soon!')}
+                        style={{
+                          padding: '12px 24px',
+                          fontSize: '16px',
+                          fontWeight: '600',
+                          backgroundColor: '#128C7E',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        📅 View Scheduled Sessions
+                      </button>
+                    </div>
                 {groups.length > 0 ? (
                   <div className="dashboard-content">
                     <div className="section-header">
