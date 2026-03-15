@@ -34,6 +34,10 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://192.168.1.133:3000"
 ].filter(Boolean);
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true
+}));
 
 const io = new Server(server, {
   cors: {
