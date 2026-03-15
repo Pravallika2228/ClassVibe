@@ -104,7 +104,11 @@ if (process.env.ENABLE_SESSION_REMINDERS !== 'false') {
 
 // ✅ CORS Configuration - THIS WAS MISSING!
 app.use(cors({
-  origin: function(origin, callback) {
+  origin:  [
+    "https://classvibe.vercel.app",
+    "http://localhost:3000"
+  ],
+  function(origin, callback) {
     if (!origin) return callback(null, true);
     
     if (allowedOrigins.indexOf(origin) === -1) {
