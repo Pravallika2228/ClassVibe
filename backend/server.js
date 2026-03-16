@@ -32,7 +32,7 @@ const server = http.createServer(app);
 const allowedOrigins = [
   process.env.FRONTEND_URL,
   "http://localhost:3000",
-  "http://192.168.1.133:3000"
+  "http://192.168.1.131:3000"
 ].filter(Boolean);
 app.use(cors({
   origin: allowedOrigins,
