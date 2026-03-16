@@ -133,7 +133,7 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
       setLoading(true);
       try {
         // Call register (backend expects { username, password } per api.js)
-        await register(email.trim(), password);
+        await register(email.trim(), password, email.split('@')[0], 'teacher');  // ⭐ Pass role='teacher'
 
         setMessageType("success");
         setMessage("Account created. Please sign in.");

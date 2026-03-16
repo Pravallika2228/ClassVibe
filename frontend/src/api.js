@@ -30,14 +30,14 @@ api.interceptors.request.use(
 // ============================================
 // AUTH API CALLS
 // ============================================
-export const register = async (email, password, name, role = 'student') => {
+export const register = async (email, password, name = '', role = 'student') => {
   try {
     const response = await api.post('/auth/register', {
       email,
       password,
-      name,
+      name: name || email.split('@')[0],  // ⭐ Use email as fallback name
       username: email.split('@')[0],
-      role
+      role  // ⭐ This will now be 'teacher' when called from TeacherLogin
     });
     return response.data;
   } catch (error) {
