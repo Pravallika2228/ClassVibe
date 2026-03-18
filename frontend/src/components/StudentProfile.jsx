@@ -14,7 +14,7 @@ const StudentProfile = ({ studentId, groupId, onClose, onBack }) => {
       const token = localStorage.getItem('token');
 
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/analytics/student/${studentId}/group/${groupId}`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/analytics/student/${studentId}/group/${groupId}`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }

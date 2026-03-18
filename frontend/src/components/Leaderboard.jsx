@@ -11,7 +11,7 @@ const Leaderboard = ({ sessionId, myScore, onClose }) => {
       const token = localStorage.getItem('token');
 
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/quiz/session/${sessionId}/leaderboard`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/quiz/session/${sessionId}/leaderboard`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }

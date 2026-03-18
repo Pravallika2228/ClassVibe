@@ -16,7 +16,7 @@ const FloatingQuizButton = ({
       const token = localStorage.getItem('token');
 
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/quiz/group/${groupId}/active`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/quiz/group/${groupId}/active`,
         {
           headers: { Authorization: `Bearer ${token}` }
         }

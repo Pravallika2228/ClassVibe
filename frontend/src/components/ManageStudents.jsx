@@ -28,7 +28,7 @@ const ManageStudents = ({ session, onUpdate, onClose }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/schedule/${session._id}/emails`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/schedule/${session._id}/emails`,
         {
           method: 'POST',
           headers: {
@@ -86,7 +86,7 @@ const ManageStudents = ({ session, onUpdate, onClose }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/schedule/${session._id}/emails`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/schedule/${session._id}/emails`,
         {
           method: 'POST',
           headers: {
@@ -126,7 +126,7 @@ const ManageStudents = ({ session, onUpdate, onClose }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/schedule/${session._id}/emails`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/schedule/${session._id}/emails`,
         {
           method: 'POST',
           headers: {

@@ -16,7 +16,7 @@ const UpcomingSessions = ({ onClose }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/schedule/available`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/schedule/available`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
@@ -40,7 +40,7 @@ const UpcomingSessions = ({ onClose }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/schedule/${sessionId}/register`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/schedule/${sessionId}/register`,
         {
           method: 'POST',
           headers: {

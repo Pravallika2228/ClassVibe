@@ -32,7 +32,7 @@ const NotificationBell = ({ socket }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/notifications/unread-count`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/notifications/unread-count`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }

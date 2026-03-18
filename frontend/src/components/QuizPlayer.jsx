@@ -19,7 +19,7 @@ const joinQuiz = useCallback(async () => {
   try {
     const token = localStorage.getItem('token');
     const response = await fetch(
-      `${process.env.REACT_APP_API_URL}/api/quiz/session/${sessionId}/join`,
+      `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/quiz/session/${sessionId}/join`,
       {
         method: 'POST',
         headers: {
@@ -69,7 +69,7 @@ const handleSubmit = useCallback(async () => {
   try {
     const token = localStorage.getItem('token');
     const response = await fetch(
-      `${process.env.REACT_APP_API_URL}/api/quiz/session/${sessionId}/answer`,
+      `${process.env.REACT_APP_API_URL|| "https://classvibe-backend.onrender.com"}/api/quiz/session/${sessionId}/answer`,
       {
         method: 'POST',
         headers: {

@@ -46,7 +46,7 @@ const QuizHost = ({ quiz, session, onClose, socket }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/quiz/session/${session._id}/begin`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/quiz/session/${session._id}/begin`,
         {
           method: 'POST',
           headers: {
@@ -75,7 +75,7 @@ const QuizHost = ({ quiz, session, onClose, socket }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/quiz/session/${session._id}/next`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/quiz/session/${session._id}/next`,
         {
           method: 'POST',
           headers: {
@@ -109,7 +109,7 @@ const QuizHost = ({ quiz, session, onClose, socket }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/quiz/session/${session._id}/end`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/quiz/session/${session._id}/end`,
         {
           method: 'POST',
           headers: {

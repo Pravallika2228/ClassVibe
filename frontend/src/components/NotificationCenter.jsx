@@ -17,8 +17,8 @@ const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
 
       const url =
         filter === 'unread'
-          ? `${process.env.REACT_APP_API_URL}/api/notifications/my-notifications?unreadOnly=true`
-          : `${process.env.REACT_APP_API_URL}/api/notifications/my-notifications`;
+          ? `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/notifications/my-notifications?unreadOnly=true`
+          : `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/notifications/my-notifications`;
 
       const response = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` }
@@ -46,7 +46,7 @@ const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
         const token = localStorage.getItem('token');
 
         await fetch(
-          `${process.env.REACT_APP_API_URL}/api/notifications/${notification._id}/read`,
+          `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/notifications/${notification._id}/read`,
           {
             method: 'PUT',
             headers: { Authorization: `Bearer ${token}` }
@@ -76,7 +76,7 @@ const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
       const token = localStorage.getItem('token');
 
       await fetch(
-        `${process.env.REACT_APP_API_URL}/api/notifications/mark-all-read`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/notifications/mark-all-read`,
         {
           method: 'PUT',
           headers: { Authorization: `Bearer ${token}` }
@@ -100,7 +100,7 @@ const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
       const token = localStorage.getItem('token');
 
       await fetch(
-        `${process.env.REACT_APP_API_URL}/api/notifications/clear-read`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/notifications/clear-read`,
         {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` }

@@ -18,12 +18,12 @@ const StudentAnalytics = ({ groupId, onClose }) => {
       const token = localStorage.getItem('token');
 
       const summaryRes = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/analytics/group/${groupId}/summary`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/analytics/group/${groupId}/summary`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       const studentsRes = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/analytics/group/${groupId}/students`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/analytics/group/${groupId}/students`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -50,7 +50,7 @@ const StudentAnalytics = ({ groupId, onClose }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/analytics/group/${groupId}/export?type=all`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/analytics/group/${groupId}/export?type=all`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }

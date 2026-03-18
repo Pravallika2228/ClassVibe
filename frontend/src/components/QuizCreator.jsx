@@ -33,7 +33,7 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/quiz/generate`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/quiz/generate`,
         {
           method: 'POST',
           headers: {
@@ -85,7 +85,7 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/quiz/${generatedQuiz._id}`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/quiz/${generatedQuiz._id}`,
         {
           method: 'PUT',
           headers: {
@@ -125,7 +125,7 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
       // First save the quiz
       const token = localStorage.getItem('token');
       await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/quiz/${generatedQuiz._id}`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/quiz/${generatedQuiz._id}`,
         {
           method: 'PUT',
           headers: {
@@ -142,7 +142,7 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
 
       // Then start the session
       const startResponse = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/quiz/${generatedQuiz._id}/start`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/quiz/${generatedQuiz._id}/start`,
         {
           method: 'POST',
           headers: {
