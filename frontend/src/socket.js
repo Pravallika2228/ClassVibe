@@ -8,7 +8,7 @@ const SOCKET_URL =
 const socket = io(SOCKET_URL,"wss://classvibe-backend.onrender.com",  {
   path: "/socket.io",  
   autoConnect: false,
-  transports: ["websocket", "polling"],
+  transports: ["websocket"],
   withCredentials: true
 });
 
