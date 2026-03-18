@@ -41,7 +41,7 @@ app.use(cors({
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins.length ? allowedOrigins : true,
+    origin: process.env.FRONTEND_URL,
     methods: ["GET", "POST"],
     credentials: true
   },
