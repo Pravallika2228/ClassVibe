@@ -1,4 +1,5 @@
 {
+   "$schema": "https://json.schemastore.org/package.json",
   "name": "chat-app-backend",
   "version": "1.0.0",
   "description": "Real-time group chat backend with Socket.io",

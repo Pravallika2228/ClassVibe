@@ -33,7 +33,7 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/schedule/my-sessions?status=all`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/schedule/my-sessions?status=all`,
         {
           headers: { 'Authorization': `Bearer ${token}` }
         }
@@ -84,7 +84,7 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/schedule/create`,
+        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/schedule/create`,
         {
           method: 'POST',
           headers: {
