@@ -1,28 +1,27 @@
 // frontend/src/components/NotificationCenter.jsx
 // Notification center panel
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all'); // 'all', 'unread'
+  const [filter, setFilter] = useState('all');
   const navigate = useNavigate();
 
-  useEffect(() => {
-    fetchNotifications();
-  }, [filter]);
-
-  const fetchNotifications = async () => {
+  // ✅ FIX: useCallback
+  const fetchNotifications = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
-      const url = filter === 'unread'
-        ? `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/notifications/my-notifications?unreadOnly=true`
-        : `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/notifications/my-notifications`;
-      
+
+      const url =
+        filter === 'unread'
+          ? `${process.env.REACT_APP_API_URL}/api/notifications/my-notifications?unreadOnly=true`
+          : `${process.env.REACT_APP_API_URL}/api/notifications/my-notifications`;
+
       const response = await fetch(url, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` }
       });
 
       if (response.ok) {
@@ -34,33 +33,38 @@ const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filter]); // ✅ dependency
+
+  // ✅ FIX: dependency added
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
 
   const handleNotificationClick = async (notification) => {
-    // Mark as read
     if (!notification.isRead) {
       try {
         const token = localStorage.getItem('token');
+
         await fetch(
-          `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/notifications/${notification._id}/read`,
+          `${process.env.REACT_APP_API_URL}/api/notifications/${notification._id}/read`,
           {
             method: 'PUT',
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: { Authorization: `Bearer ${token}` }
           }
         );
-        
-        // Update local state
-        setNotifications(prev =>
-          prev.map(n => n._id === notification._id ? { ...n, isRead: true } : n)
+
+        setNotifications((prev) =>
+          prev.map((n) =>
+            n._id === notification._id ? { ...n, isRead: true } : n
+          )
         );
-        
+
         if (onNotificationRead) onNotificationRead();
       } catch (error) {
         console.error('Mark as read error:', error);
       }
     }
 
-    // Navigate to action URL
     if (notification.actionUrl) {
       onClose();
       navigate(notification.actionUrl);
@@ -70,15 +74,19 @@ const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
   const handleMarkAllRead = async () => {
     try {
       const token = localStorage.getItem('token');
+
       await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/notifications/mark-all-read`,
+        `${process.env.REACT_APP_API_URL}/api/notifications/mark-all-read`,
         {
           method: 'PUT',
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` }
         }
       );
 
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      setNotifications((prev) =>
+        prev.map((n) => ({ ...n, isRead: true }))
+      );
+
       if (onMarkAllRead) onMarkAllRead();
     } catch (error) {
       console.error('Mark all as read error:', error);
@@ -90,15 +98,16 @@ const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
 
     try {
       const token = localStorage.getItem('token');
+
       await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/notifications/clear-read`,
+        `${process.env.REACT_APP_API_URL}/api/notifications/clear-read`,
         {
           method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` }
         }
       );
 
-      setNotifications(prev => prev.filter(n => !n.isRead));
+      setNotifications((prev) => prev.filter((n) => !n.isRead));
     } catch (error) {
       console.error('Clear notifications error:', error);
     }

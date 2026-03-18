@@ -1,40 +1,55 @@
-// frontend/src/components/FloatingQuizButton.jsx
-// Floating round button visible during session
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 const FloatingQuizButton = ({ 
   groupId, 
   isTeacher, 
-  onCreateQuiz,    // Teacher: Opens QuizHost
-  onJoinQuiz,      // Student: Opens QuizPlayer/WaitingRoom
+  onCreateQuiz,
+  onJoinQuiz,
   socket 
 }) => {
   const [quizSession, setQuizSession] = useState(null);
   const [pulse, setPulse] = useState(false);
 
+  // ✅ FIX: useCallback added
+  const checkActiveQuiz = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/api/quiz/group/${groupId}/active`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      const data = await response.json();
+
+      if (data.session) {
+        setQuizSession(data.session);
+      }
+    } catch (error) {
+      console.error('Check active quiz error:', error);
+    }
+  }, [groupId]);
+
   useEffect(() => {
     if (!socket || !groupId) return;
 
-    // Listen for quiz events
     socket.on('quizStarted', (data) => {
-      console.log('🎮 Quiz started event:', data);
       setQuizSession({ status: 'waiting', ...data });
       setPulse(true);
       setTimeout(() => setPulse(false), 2000);
     });
 
-    socket.on('quizBegan', (data) => {
-      console.log('▶️ Quiz began event:', data);
+    socket.on('quizBegan', () => {
       setQuizSession(prev => ({ ...prev, status: 'active' }));
     });
 
-    socket.on('quizEnded', (data) => {
-      console.log('🏁 Quiz ended event:', data);
+    socket.on('quizEnded', () => {
       setQuizSession(null);
     });
 
-    // Check for active quiz on mount
+    // ✅ FIX: now safe
     checkActiveQuiz();
 
     return () => {
@@ -42,46 +57,20 @@ const FloatingQuizButton = ({
       socket.off('quizBegan');
       socket.off('quizEnded');
     };
-  }, [socket, groupId]);
-
-  const checkActiveQuiz = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/quiz/group/${groupId}/active`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
-      );
-      const data = await response.json();
-      
-      if (data.session) {
-        setQuizSession(data.session);
-      }
-    } catch (error) {
-      console.error('Check active quiz error:', error);
-    }
-  };
+  }, [socket, groupId, checkActiveQuiz]); // ✅ added dependency
 
   const handleClick = () => {
     if (isTeacher) {
-      if (quizSession) {
-        // Open host control panel
-        onCreateQuiz(quizSession);
-      } else {
-        // Open quiz creator
-        onCreateQuiz(null);
-      }
+      onCreateQuiz(quizSession || null);
     } else {
       if (quizSession) {
-        // Join quiz
         onJoinQuiz(quizSession);
       } else {
-        // No quiz available
         alert('No quiz available. Wait for your teacher to create one!');
       }
     }
   };
+
 
   const getButtonContent = () => {
     if (!quizSession) {
@@ -109,7 +98,9 @@ const FloatingQuizButton = ({
         emoji: '⏳',
         text: 'Waiting',
         color: '#FFA500',
-        subtext: isTeacher ? `${quizSession.participants?.length || 0} joined` : 'Join Now',
+        subtext: isTeacher 
+          ? `${quizSession.participants?.length || 0} joined` 
+          : 'Join Now',
         shadowColor: 'rgba(255, 165, 0, 0.6)'
       };
     }
@@ -126,50 +117,26 @@ const FloatingQuizButton = ({
   const content = getButtonContent();
 
   return (
-    <>
-      <div
-        onClick={handleClick}
-        style={{
-          ...styles.button,
-          backgroundColor: content.color,
-          boxShadow: pulse 
-            ? `0 0 30px ${content.shadowColor}` 
-            : `0 4px 20px ${content.shadowColor}`,
-          animation: pulse ? 'pulse 1.5s ease-in-out' : 'float 3s ease-in-out infinite'
-        }}
-        title={isTeacher ? 'Manage Quiz' : 'Join Quiz'}
-      >
-        <div style={styles.emoji}>{content.emoji}</div>
-        <div style={styles.text}>{content.text}</div>
-        <div style={styles.subtext}>{content.subtext}</div>
-        
-        {quizSession?.participants?.length > 0 && (
-          <div style={styles.badge}>{quizSession.participants.length}</div>
-        )}
-      </div>
+    <div
+      onClick={handleClick}
+      style={{
+        ...styles.button,
+        backgroundColor: content.color,
+        boxShadow: pulse 
+          ? `0 0 30px ${content.shadowColor}` 
+          : `0 4px 20px ${content.shadowColor}`
+      }}
+    >
+      <div style={styles.emoji}>{content.emoji}</div>
+      <div style={styles.text}>{content.text}</div>
+      <div style={styles.subtext}>{content.subtext}</div>
 
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { 
-            transform: scale(1); 
-            box-shadow: 0 4px 20px ${content.shadowColor};
-          }
-          50% { 
-            transform: scale(1.15); 
-            box-shadow: 0 0 40px ${content.shadowColor};
-          }
-        }
-
-        @keyframes float {
-          0%, 100% { 
-            transform: translateY(0px); 
-          }
-          50% { 
-            transform: translateY(-10px); 
-          }
-        }
-      `}</style>
-    </>
+      {quizSession?.participants?.length > 0 && (
+        <div style={styles.badge}>
+          {quizSession.participants.length}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -187,28 +154,11 @@ const styles = {
     justifyContent: 'center',
     cursor: 'pointer',
     zIndex: 999,
-    transition: 'all 0.3s ease',
-    border: '4px solid white',
-    userSelect: 'none'
+    border: '4px solid white'
   },
-  emoji: {
-    fontSize: '32px',
-    marginBottom: '2px'
-  },
-  text: {
-    fontSize: '12px',
-    fontWeight: '800',
-    color: 'white',
-    textTransform: 'uppercase',
-    letterSpacing: '1px',
-    textShadow: '0 2px 4px rgba(0,0,0,0.3)'
-  },
-  subtext: {
-    fontSize: '9px',
-    color: 'rgba(255,255,255,0.95)',
-    marginTop: '2px',
-    fontWeight: '600'
-  },
+  emoji: { fontSize: '32px' },
+  text: { fontSize: '12px', color: 'white', fontWeight: '800' },
+  subtext: { fontSize: '9px', color: 'white' },
   badge: {
     position: 'absolute',
     top: '-5px',
@@ -220,11 +170,7 @@ const styles = {
     height: '28px',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '13px',
-    fontWeight: '800',
-    border: '3px solid white',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+    justifyContent: 'center'
   }
 };
 

@@ -1,5 +1,5 @@
 // frontend/src/components/QuizPlayer.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Leaderboard from './Leaderboard';
 
 const QuizPlayer = ({ sessionId, onClose }) => {
@@ -14,41 +14,41 @@ const QuizPlayer = ({ sessionId, onClose }) => {
   const [myStats, setMyStats] = useState({ score: 0, rank: null });
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    joinQuiz();
-    // Listen for socket events
-    setupSocketListeners();
-    
-    return () => {
-      // Cleanup socket listeners
-    };
-  }, []);
 
-  const joinQuiz = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/quiz/session/${sessionId}/join`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          }
+const joinQuiz = useCallback(async () => {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(
+      `${process.env.REACT_APP_API_URL}/api/quiz/session/${sessionId}/join`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setSession(data.session);
-        setQuiz(data.session.quiz);
-        setCurrentQuestion(data.session.quiz.questions[data.session.currentQuestionIndex]);
-        setLoading(false);
       }
-    } catch (error) {
-      console.error('Join error:', error);
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      setSession(data.session);
+      setQuiz(data.session.quiz);
+      setCurrentQuestion(data.session.quiz.questions[data.session.currentQuestionIndex]);
+      setLoading(false);
     }
+  } catch (error) {
+    console.error('Join error:', error);
+  }
+}, [sessionId]);
+
+useEffect(() => {
+  joinQuiz();
+  setupSocketListeners();
+
+  return () => {
+    // cleanup if needed
   };
+}, [joinQuiz]);
 
   const setupSocketListeners = () => {
     // Listen for next question
@@ -56,55 +56,55 @@ const QuizPlayer = ({ sessionId, onClose }) => {
     // Listen for leaderboard updates
   };
 
-  useEffect(() => {
-    if (timeLeft > 0 && !hasAnswered) {
-      const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
-      return () => clearTimeout(timer);
-    } else if (timeLeft === 0 && !hasAnswered) {
-      handleSubmit(); // Auto-submit on timeout
-    }
-  }, [timeLeft, hasAnswered]);
 
-  const handleSubmit = async () => {
-    if (selectedAnswer === null) {
-      alert('Please select an answer');
-      return;
-    }
+const handleSubmit = useCallback(async () => {
+  if (selectedAnswer === null) {
+    alert('Please select an answer');
+    return;
+  }
 
-    setHasAnswered(true);
-    const timeTaken = 30 - timeLeft;
+  setHasAnswered(true);
+  const timeTaken = 30 - timeLeft;
 
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/quiz/session/${sessionId}/answer`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            questionIndex: session.currentQuestionIndex,
-            selectedAnswer,
-            timeTaken
-          })
-        }
-      );
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(
+      `${process.env.REACT_APP_API_URL}/api/quiz/session/${sessionId}/answer`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          questionIndex: session.currentQuestionIndex,
+          selectedAnswer,
+          timeTaken
+        })
+      }
+    );
 
-      const data = await response.json();
-      setResult(data);
-      setMyStats({ ...myStats, score: data.currentScore });
+    const data = await response.json();
+    setResult(data);
+    setMyStats(prev => ({ ...prev, score: data.currentScore }));
 
-      // Show leaderboard after 3 seconds
-      setTimeout(() => {
-        setShowLeaderboard(true);
-      }, 3000);
+    setTimeout(() => {
+      setShowLeaderboard(true);
+    }, 3000);
 
-    } catch (error) {
-      console.error('Submit error:', error);
-    }
-  };
+  } catch (error) {
+    console.error('Submit error:', error);
+  }
+}, [selectedAnswer, timeLeft, session, sessionId]);
+
+useEffect(() => {
+  if (timeLeft > 0 && !hasAnswered) {
+    const timer = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+    return () => clearTimeout(timer);
+  } else if (timeLeft === 0 && !hasAnswered) {
+    handleSubmit();
+  }
+}, [timeLeft, hasAnswered, handleSubmit]); // ✅ FIXED
 
   if (loading) return <div style={styles.loading}>Loading quiz...</div>;
 

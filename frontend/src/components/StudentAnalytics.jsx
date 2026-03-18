@@ -1,7 +1,7 @@
 // frontend/src/components/StudentAnalytics.jsx
 // Teacher dashboard for student analytics
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import StudentProfile from './StudentProfile';
 
 const StudentAnalytics = ({ groupId, onClose }) => {
@@ -9,33 +9,28 @@ const StudentAnalytics = ({ groupId, onClose }) => {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [filter, setFilter] = useState('all'); // 'all', 'excellent', 'needsAttention'
-  const [sortBy, setSortBy] = useState('participation'); // 'participation', 'quizScore', 'messages'
+  const [filter, setFilter] = useState('all');
+  const [sortBy, setSortBy] = useState('participation');
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, []);
-
-  const fetchAnalytics = async () => {
+  // ✅ FIX: wrap in useCallback
+  const fetchAnalytics = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
-      
-      // Fetch summary
+
       const summaryRes = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/analytics/group/${groupId}/summary`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
+        `${process.env.REACT_APP_API_URL}/api/analytics/group/${groupId}/summary`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-      
-      // Fetch students
+
       const studentsRes = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/analytics/group/${groupId}/students`,
-        { headers: { 'Authorization': `Bearer ${token}` } }
+        `${process.env.REACT_APP_API_URL}/api/analytics/group/${groupId}/students`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (summaryRes.ok && studentsRes.ok) {
         const summaryData = await summaryRes.json();
         const studentsData = await studentsRes.json();
-        
+
         setSummary(summaryData.summary);
         setStudents(studentsData.analytics);
       }
@@ -44,7 +39,12 @@ const StudentAnalytics = ({ groupId, onClose }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [groupId]); // ✅ dependency
+
+  // ✅ FIX: dependency added
+  useEffect(() => {
+    fetchAnalytics();
+  }, [fetchAnalytics]);
 
   const handleExport = async () => {
     try {

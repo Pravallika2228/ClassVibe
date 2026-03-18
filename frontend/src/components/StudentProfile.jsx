@@ -1,24 +1,22 @@
 // frontend/src/components/StudentProfile.jsx
 // Detailed student profile and analytics
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 const StudentProfile = ({ studentId, groupId, onClose, onBack }) => {
   const [analytics, setAnalytics] = useState(null);
   const [recentQuizzes, setRecentQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchStudentData();
-  }, []);
-
-  const fetchStudentData = async () => {
+  // ✅ FIX: useCallback
+  const fetchStudentData = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
+
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/analytics/student/${studentId}/group/${groupId}`,
+        `${process.env.REACT_APP_API_URL}/api/analytics/student/${studentId}/group/${groupId}`,
         {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` }
         }
       );
 
@@ -32,7 +30,12 @@ const StudentProfile = ({ studentId, groupId, onClose, onBack }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [studentId, groupId]); // ✅ dependencies
+
+  // ✅ FIX: dependency added
+  useEffect(() => {
+    fetchStudentData();
+  }, [fetchStudentData]);
 
   const getPerformanceColor = (level) => {
     const colors = {

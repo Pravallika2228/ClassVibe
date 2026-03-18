@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/package.json",
   "name": "frontend",
   "version": "0.1.0",
   "private": true,
@@ -10,7 +11,7 @@
     "axios": "^1.13.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^7.13.1",
+    "react-router-dom": "^6.22.3",
     "react-scripts": "5.0.1",
     "socket.io-client": "^4.8.3",
     "web-vitals": "^2.1.4"
@@ -22,17 +23,10 @@
     "eject": "react-scripts eject"
   },
   "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+    "extends": ["react-app", "react-app/jest"]
   },
   "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
+    "production": [">0.2%", "not dead", "not op_mini all"],
     "development": [
       "last 1 chrome version",
       "last 1 firefox version",

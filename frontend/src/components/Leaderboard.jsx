@@ -1,41 +1,46 @@
-// frontend/src/components/Leaderboard.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 const Leaderboard = ({ sessionId, myScore, onClose }) => {
   const [rankings, setRankings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [myRank, setMyRank] = useState(null);
 
-  useEffect(() => {
-  fetchLeaderboard();
-  }, []);
-
-  const fetchLeaderboard = async () => {
+  // ✅ FIX: useCallback added
+  const fetchLeaderboard = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
+
       const response = await fetch(
         `${process.env.REACT_APP_API_URL}/api/quiz/session/${sessionId}/leaderboard`,
         {
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` }
         }
       );
 
       if (response.ok) {
         const data = await response.json();
         setRankings(data.leaderboard);
-        
-        // Find my rank
-        const userId = JSON.parse(localStorage.getItem('user'))._id;
-        const myIndex = data.leaderboard.findIndex(r => r.userId === userId);
+
+        const user = JSON.parse(localStorage.getItem('user'));
+        const userId = user?._id;
+
+        const myIndex = data.leaderboard.findIndex(
+          (r) => r.userId === userId
+        );
+
         setMyRank(myIndex + 1);
-        
         setLoading(false);
       }
     } catch (error) {
       console.error('Leaderboard error:', error);
       setLoading(false);
     }
-  };
+  }, [sessionId]); // ✅ dependency added
+
+  // ✅ FIX: dependency added here
+  useEffect(() => {
+    fetchLeaderboard();
+  }, [fetchLeaderboard]);
 
   const getBadge = (rank) => {
     if (rank === 1) return '🥇';
@@ -54,7 +59,6 @@ const Leaderboard = ({ sessionId, myScore, onClose }) => {
           <button onClick={onClose} style={styles.closeBtn}>✕</button>
         </div>
 
-        {/* My Rank Card */}
         {myRank && (
           <div style={styles.myRankCard}>
             <div style={styles.myRankBadge}>{getBadge(myRank)}</div>
@@ -66,7 +70,6 @@ const Leaderboard = ({ sessionId, myScore, onClose }) => {
           </div>
         )}
 
-        {/* Rankings List */}
         <div style={styles.rankingsList}>
           {rankings.map((player, index) => (
             <div
