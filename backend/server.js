@@ -34,8 +34,12 @@ const allowedOrigins = [
   "http://localhost:3000",
   "http://192.168.1.131:3000"
 ].filter(Boolean);
+
 app.use(cors({
-  origin: allowedOrigins,
+  origin: [
+    process.env.FRONTEND_URL,
+    "http://localhost:3000"
+  ],
   credentials: true
 }));
 
@@ -55,14 +59,9 @@ app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
 
-// After other route imports
-const quizRoutes = require('./routes/quiz');
 
 // After other routes
 app.use('/api/quiz', quizRoutes);
-
-// Import
-const analyticsRoutes = require('./routes/analytics');
 
 // Use
 app.use('/api/analytics', analyticsRoutes);
@@ -104,10 +103,6 @@ if (process.env.ENABLE_SESSION_REMINDERS !== 'false') {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-
 // ============================================
 // MIDDLEWARE
 // ============================================
@@ -115,7 +110,7 @@ app.listen(PORT, () => {
 // ✅ CORS Configuration - THIS WAS MISSING!
 app.use(cors({
   origin:  [
-    "https://classvibe.vercel.app",
+    "https://class-vibe-beta.vercel.app",
     "http://localhost:3000"
   ],
   function(origin, callback) {
