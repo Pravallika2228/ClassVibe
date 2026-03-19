@@ -102,6 +102,12 @@ if (process.env.ENABLE_SESSION_REMINDERS !== 'false') {
   console.log('⏸️ Session reminder job is disabled');
 }
 
+const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
 // ============================================
 // MIDDLEWARE
 // ============================================
