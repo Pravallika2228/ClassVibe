@@ -101,7 +101,6 @@ if (process.env.ENABLE_SESSION_REMINDERS !== 'false') {
   console.log('⏸️ Session reminder job is disabled');
 }
 
-const PORT = process.env.PORT || 5000;
 
 // ============================================
 // MIDDLEWARE
@@ -1156,17 +1155,21 @@ io.on('connection', (socket) => {
 // START SERVER
 // ============================================
 
-const mongoose = require("mongoose");
+const PORT = process.env.PORT || 5000;
+
+// ✅ START SERVER FIRST (IMPORTANT)
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
+
+// ✅ THEN CONNECT DB (non-blocking)
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("✅ MongoDB Connected");
-    server.listen(PORT, "0.0.0.0", () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-    });
   })
   .catch(err => {
     console.error("❌ MongoDB connection failed", err);
-    process.exit(1);
+    // ⚠️ DON'T STOP SERVER
   });
 
 // ============================================
