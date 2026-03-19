@@ -111,6 +111,8 @@ const scheduledSessionSchema = new mongoose.Schema({
   timestamps: true
 });
 
+module.exports = mongoose.model('ScheduledSession', scheduledSessionSchema);
+
 // ========================================
 // METHODS
 // ========================================
@@ -240,5 +242,3 @@ scheduledSessionSchema.index({ teacher: 1, scheduledDate: 1 });
 scheduledSessionSchema.index({ status: 1, scheduledDate: 1 });
 scheduledSessionSchema.index({ joinCode: 1 });
 scheduledSessionSchema.index({ 'allowedEmails': 1 });
-
-module.exports = mongoose.model('ScheduledSession', scheduledSessionSchema);
