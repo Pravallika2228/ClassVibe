@@ -13,6 +13,8 @@ const crypto = require('crypto');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const mongoose = require('mongoose'); // ✅ ADD THIS
+
 // After: const Message = require('./models/Message');
 // ADD THIS:
 const ScheduledSession = require('./models/ScheduledSession');  // ⭐ NEW
