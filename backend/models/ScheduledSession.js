@@ -81,7 +81,8 @@ const scheduledSessionSchema = new mongoose.Schema({
   // Notifications
   reminderSent: {
     type: Boolean,
-    default: false
+    default: false,
+    description: 'Whether 15-min reminder was sent'
   },
   
   // Settings
@@ -230,19 +231,6 @@ scheduledSessionSchema.statics.findSessionsToStart = function() {
     }
   }).populate('teacher');
 };
-
-// Add this field to your schema
-const scheduledSessionSchema = new mongoose.Schema({
-  // ... existing fields ...
-  
-  reminderSent: {
-    type: Boolean,
-    default: false,
-    description: 'Whether 15-min reminder was sent'
-  }
-  
-  // ... rest of schema ...
-});
 
 // ========================================
 // INDEXES
