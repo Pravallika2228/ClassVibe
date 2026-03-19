@@ -5,12 +5,11 @@ const SOCKET_URL =
   process.env.REACT_APP_API_URL ||
   "https://classvibe-backend.onrender.com";
 
-const socket = io(SOCKET_URL,"wss://classvibe-backend.onrender.com",  {
-  path: "/socket.io",  
-  autoConnect: false,
+const socket = io(SOCKET_URL, {
+  path: "/socket.io",
   transports: ["websocket"],
-  withCredentials: true
+  withCredentials: true,
+  autoConnect: false
 });
-
 
 export default socket;
