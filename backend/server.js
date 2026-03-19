@@ -29,6 +29,19 @@ const Message = require('./models/Message');
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  "http://localhost:3000",
+  "http://192.168.1.131:3000"
+].filter(Boolean);
+
+app.use(cors({
+  origin: [
+    process.env.FRONTEND_URL,
+    "http://localhost:3000"
+  ],
+  credentials: true
+}));
 
 const io = new Server(server, {
   cors: {
@@ -87,24 +100,7 @@ if (process.env.ENABLE_SESSION_REMINDERS !== 'false') {
 // ============================================
 
 // ✅ CORS Configuration - THIS WAS MISSING!
-app.use(cors({
-  origin:  [
-    "https://class-vibe-beta.vercel.app",
-    "http://localhost:3000"
-  ],
-  function(origin, callback) {
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'CORS policy: Origin not allowed';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+
 
 app.options('*', cors());
 
