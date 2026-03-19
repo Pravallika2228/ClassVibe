@@ -242,6 +242,10 @@ app.get('/', (req, res) => {
   res.json({ message: 'Chat App Server is Running! 🚀' });
 });
 
+app.get("/", (req, res) => {
+  res.send("Server is running ✅");
+});
+
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
