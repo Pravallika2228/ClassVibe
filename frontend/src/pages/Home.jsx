@@ -28,8 +28,6 @@ export default function Home({ onTeacher, onStudent }) {
             </div>
             <div className="hero-image">
               <img src="/css/demo.png" alt="demo" />
-              <img src="/css/back.png" alt="back" />
-              <img src="/css/back 2.png" alt="back2" />
             </div>
           </div>          
 
