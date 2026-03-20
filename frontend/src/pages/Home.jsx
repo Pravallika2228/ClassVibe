@@ -33,46 +33,40 @@ export default function Home({ onTeacher, onStudent }) {
             <div className="hero-image">
               <img src="/css/demo.png" alt="demo" />
             </div>
-          </div>          
+          </div>
 
-          <div className="row feature-row">
-            <div className="col-1">
-              <div className="feature-card">
-                <img
-                  src="/css/all.min.css/qr.png"
-                  alt="qr code"
-                  className="big-icon"
-                />
+          <div className="tools-section">
+            <h2>Powerful Tools for Modern Education</h2>
+            <p className="subtitle">
+              We’ve built ClassConnect from the ground up to solve the challenges of real-time digital interaction
+            </p>
+
+            <div className="cards">
+
+              <div className="card">
+                <div className="icon">⚡</div>
                 <h3>Instant Access</h3>
                 <p>
-                  Students join sessions instantly with QR codes or PIN numbers.
-                  No accounts needed.
+                  Students join sessions instantly with QR codes or PIN numbers. No accounts or lengthy signups needed.
                 </p>
               </div>
-            </div>
 
-            <div className="col-1">
-              <div className="feature-card">
-                <img
-                  src="/css/all.min.css/comment.png"
-                  alt="chat"
-                  className="big-icon"
-                />
+              <div className="card">
+                <div className="icon">💬</div>
                 <h3>Real-time Chat</h3>
-                <p>Engage students with live messaging, polls, and interactive activities.</p>
+                <p>
+                  Engage students with live messaging, polls, and interactive activities during any live session.
+                </p>
               </div>
-            </div>
 
-            <div className="col-1">
-              <div className="feature-card">
-                <img
-                  src="/css/all.min.css/skill-user.png"
-                  alt="Management"
-                  className="big-icon"
-                />
+              <div className="card">
+                <div className="icon">🛡️</div>
                 <h3>Classroom Management</h3>
-                <p>Manage sessions, moderate content, and track participation effortlessly.</p>
+                <p>
+                  Manage sessions, moderate content, and track participation effortlessly with automated tools.
+                </p>
               </div>
+
             </div>
           </div>
 
