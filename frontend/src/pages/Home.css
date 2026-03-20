@@ -94,14 +94,10 @@ h1 {
 }
 
 .hero-text h2 {
-  font-size: 38px;
-  font-weight: bold;
-  width: 120px; 
-  height: 50px; 
-  font-family: Archivo; /* Heading */
-  line-height: 48px; 
-  font-weight: 800; 
-  color: rgba(23,26,31,1); /* neutral-900 */
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1.2;
+  max-width: 600px;   /* keeps it neat like design */
 }
 
 .hero-text p {
