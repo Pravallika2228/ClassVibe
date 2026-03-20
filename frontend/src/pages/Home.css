@@ -127,6 +127,7 @@ h1 {
 }
 
 .hero-image .cir1{ 
+  position: absolute;
   top: 512px; 
   left: 704px; 
   width: 128px; 
@@ -136,6 +137,7 @@ h1 {
 }
 
 .hero-image .cir2{
+  position: absolute;
   top: 146px; 
   left: 1176px; 
   width: 96px; 
