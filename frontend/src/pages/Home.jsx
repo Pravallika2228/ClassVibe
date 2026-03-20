@@ -18,19 +18,30 @@ export default function Home({ onTeacher, onStudent }) {
             Interactive classroom engagement made simple. Connect with <br />
             your students in real-time and create an engaging learning environment.
           </p>
+          <div className="hero">
+            <div className="hero-left">
+              <h1>
+                Bridging the Gap <br />
+                Between <span>Teaching</span> <br />
+                <span className="highlight">Learning</span>
+              </h1>
 
-        <div className="container">
-          <div className="text">
-            <h2 clas>Bridging the Gap Between Teaching and Learning.</h2>
-            <p>Interactive classroom engagement made simple. 
-              Connect with your students in real-time and create an engaging learning 
-              environment that students love.
-            </p>
-          </div>
-        </div>
+              <p>
+                Interactive classroom engagement made simple.  
+                Connect with your students in real-time and create an engaging learning  
+                environment that students love.
+              </p>
 
-        
-          
+              <div className="buttons">
+                <button className="primary">Get Started for Free</button>
+                <button className="secondary">Watch Demo</button>
+              </div>
+            </div>
+
+            <div className="hero-right">
+              <img src="/css/all.min.css/right img" alt="dashboard" />
+            </div>
+          </div>          
 
           <div className="row feature-row">
             <div className="col-1">
