@@ -85,64 +85,28 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 80px;
-  background: #f8f9ff;
+  padding: 60px;
+  gap: 40px;
 }
 
-/* LEFT SIDE */
-.hero-left {
+.hero-text {
   flex: 1;
 }
 
-.hero-left h1 {
-  font-size: 56px;
-  font-weight: 800;
-  line-height: 1.2;
-  color: #1a1a1a;
+.hero-text h2 {
+  font-size: 48px;
+  font-weight: bold;
 }
 
-.hero-left span {
-  color: #5b6cff;
-}
-
-.hero-left .highlight {
-  color: #ff5c8a;
-}
-
-.hero-left p {
+.hero-text p {
   margin-top: 20px;
   font-size: 18px;
   color: #555;
-  max-width: 500px;
 }
 
-/* BUTTONS */
-.buttons {
-  margin-top: 30px;
-}
-
-.primary {
-  background: #5b6cff;
-  color: white;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 8px;
-  margin-right: 10px;
-  cursor: pointer;
-}
-
-.secondary {
-  padding: 12px 20px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  background: white;
-  cursor: pointer;
-}
-
-/* RIGHT IMAGE */
-.hero-right img {
-  width: 500px;
-  border-radius: 20px;
+.hero-image img {
+  width: 400px;
+  border-radius: 12px;
 }
 
 /* Row helpers (simple flex) */
