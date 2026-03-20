@@ -107,16 +107,9 @@ h1 {
 }
 
 .hero-text p {
-  
+  margin-top: 20px;
   font-size: 12px;
   color: #555;
-  top: 110px; 
-  left: 128px; 
-  width: 250px; 
-  font-family: Archivo; /* Heading */
-  line-height: 33px; 
-  font-weight: 400; 
-  color: #565D6DFF; 
 }
 
 .hero-image img{
