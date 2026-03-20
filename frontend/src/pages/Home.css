@@ -82,14 +82,14 @@ h1 {
 /* home page */
 .text h2{
   position: absolute; 
-  top: 153px; 
-  left: 128px; 
-  width: 891px; 
-  height: 288px; 
+  top: 20px; 
+  left: 28px; 
+  width: 91px; 
+  height: 88px; 
   font-family: Archivo; /* Heading */
-  font-size: 72px; 
-  line-height: 72px; 
-  font-weight: 800; 
+  font-size: 30px; 
+  line-height: 35px; 
+  font-weight: 45; 
   color: rgba(23,26,31,1); /* neutral-900 */
 }
 .text p{
