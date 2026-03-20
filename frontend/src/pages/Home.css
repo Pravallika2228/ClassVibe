@@ -80,6 +80,16 @@ h1 {
 .sub2 { text-align:center; color:#6b7b86; margin-bottom:24px; }
 
 /* home page */
+/* Container */
+.container {
+  position: absolute; 
+  top: 72px; 
+  left: 0px; 
+  width: 1440px; 
+  height: 771px; 
+  background: rgba(255,255,255,1); /* white */
+  border-radius: 0px 0px 0px 0px; 
+}
 .text h2{
   position: absolute; 
   top: 20px; 
