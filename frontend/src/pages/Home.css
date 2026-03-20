@@ -97,8 +97,9 @@ h1 {
   font-size: 48px;
   font-weight: 800;
   line-height: 1.2;
-  max-width: 700px;   /* keeps it neat like design */
+  max-width: 600px;   /* keeps it neat like design */
   font-family: Archivo; /* Heading */
+  left: 128px;
 }
 
 .hero-text p {
