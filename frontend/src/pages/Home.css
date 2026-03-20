@@ -107,6 +107,7 @@ h1 {
 .hero-text p {
   margin-top: 20px;
   font-size: 12px;
+  font-weight: 20;
   color: #555;
 }
 
