@@ -80,7 +80,7 @@ h1 {
 .sub2 { text-align:center; color:#6b7b86; margin-bottom:24px; }
 
 /* home page */
-.text {
+.text h2{
   position: absolute; 
   top: 153px; 
   left: 128px; 
@@ -91,6 +91,17 @@ h1 {
   line-height: 72px; 
   font-weight: 800; 
   color: rgba(23,26,31,1); /* neutral-900 */
+}
+.text p{
+  position: absolute; 
+  top: 385px; 
+  left: 128px; 
+  width: 574px; 
+  font-family: Archivo; /* Heading */
+  font-size: 20px; 
+  line-height: 33px; 
+  font-weight: 400; 
+  color: rgba(86,93,109,1); 
 }
 
 /* Row helpers (simple flex) */
