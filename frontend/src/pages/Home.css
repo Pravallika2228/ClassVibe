@@ -91,7 +91,15 @@ h1 {
 
 .hero-text {
   flex: 1;
-  
+  top: 153px; 
+  left: 128px; 
+  width: 591px; 
+  height: 288px; 
+  font-family: Archivo; /* Heading */
+  font-size: 48px; 
+  line-height: 48px; 
+  font-weight: 800; 
+  color: #171A1FFF; /* neutral-900 */
 }
 
 .hero-text h2 {
