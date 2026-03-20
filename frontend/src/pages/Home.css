@@ -101,10 +101,9 @@ h1 {
   width: 591px; 
   height: 288px; 
   font-family: Archivo; /* Heading */
-  font-size: 48px; 
   line-height: 48px; 
   font-weight: 800; 
-  color: #171A1FFF; /* neutral-900 */
+  color: rgba(23,26,31,1); /* neutral-900 */
 }
 
 .hero-text p {
@@ -115,7 +114,6 @@ h1 {
   left: 128px; 
   width: 574px; 
   font-family: Archivo; /* Heading */
-  font-size: 20px; 
   line-height: 33px; 
   font-weight: 400; 
   color: #565D6DFF; 
