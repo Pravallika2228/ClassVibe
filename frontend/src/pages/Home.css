@@ -96,9 +96,7 @@ h1 {
 .hero-text h2 {
   font-size: 38px;
   font-weight: bold;
-  
-  left: 150px; 
-  width: 70px; 
+  width: 120px; 
   height: 50px; 
   font-family: Archivo; /* Heading */
   line-height: 48px; 
