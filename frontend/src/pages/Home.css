@@ -105,11 +105,8 @@ h1 {
 }
 
 .hero-image img{
-  top: 8px; 
-  left: 8px; 
-  width: 250px; 
-  height: 150px; 
-  border-radius: 12px;
+  width: 250px;
+  height: 150px;
 }
 
 /* Row helpers (simple flex) */
