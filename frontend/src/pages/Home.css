@@ -105,9 +105,12 @@ h1 {
 }
 
 .hero-image img{
-  width: 250px;
-  height: 150px;
-   border-radius: 16px; 
+ top: 170px; 
+  left: 744px; 
+  width: 568px; 
+  height: 430px; 
+  background: #FFFFFFFF; /* white */
+  border-radius: 16px; 
   border-width: 8px; 
   border-color: #F2F2FDFF; /* primary-100 */
   border-style: solid; 
