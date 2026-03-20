@@ -94,18 +94,21 @@ h1 {
 }
 
 .hero-text h2 {
-  font-size: 48px;
+  font-size: 38px;
   font-weight: bold;
 }
 
 .hero-text p {
   margin-top: 20px;
-  font-size: 18px;
+  font-size: 12px;
   color: #555;
 }
 
 .hero-image img {
-  width: 400px;
+  top: 8px; 
+  left: 8px; 
+  width: 552px; 
+  height: 414px; 
   border-radius: 12px;
 }
 
