@@ -20,10 +20,10 @@ export default function Home({ onTeacher, onStudent }) {
           </p>
           <div className="hero">
             <div className="hero-text">
-              <h2>Bridging the Gap<br /> Between Teaching and<br /> Learning.</h2>
+              <h2>Bridging the Gap Between Teaching and Learning.</h2>
               <p>
-                Interactive classroom engagement made simple. Connect with<br /> your students
-                in real-time and create an engaging learning<br /> environment that students love.
+                Interactive classroom engagement made simple. Connect with your students
+                in real-time and create an engaging learning environment that students love.
               </p>
             </div>
             <div className="hero-image">
