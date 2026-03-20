@@ -79,6 +79,20 @@ h1 {
 .sub1 { text-align:center; color:#526577; max-width:640px; margin: 0 auto 30px; padding: 0 8px; font-size:18px; }
 .sub2 { text-align:center; color:#6b7b86; margin-bottom:24px; }
 
+/* home page */
+.text {
+  position: absolute; 
+  top: 153px; 
+  left: 128px; 
+  width: 891px; 
+  height: 288px; 
+  font-family: Archivo; /* Heading */
+  font-size: 72px; 
+  line-height: 72px; 
+  font-weight: 800; 
+  color: rgba(23,26,31,1); /* neutral-900 */
+}
+
 /* Row helpers (simple flex) */
 .row, .row1 {
  display: flex;
