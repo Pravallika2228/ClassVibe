@@ -104,11 +104,11 @@ h1 {
   color: #555;
 }
 
-.hero-image{
+.hero-image img{
   top: 8px; 
   left: 8px; 
-  width: 552px; 
-  height: 414px; 
+  width: 250px; 
+  height: 150px; 
   border-radius: 12px;
 }
 
