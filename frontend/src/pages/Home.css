@@ -81,7 +81,51 @@ h1 {
 
 /* home page */
 /* Container */
+/* MAIN CONTAINER */
+.home-inner {
+  text-align: center;
+  padding: 60px 20px;
+}
 
+/* HERO SECTION */
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 50px;
+  padding: 60px 0;
+}
+
+.hero-text {
+  flex: 1;
+  text-align: left;
+}
+
+.hero-text h2 {
+  font-size: 48px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.hero-text p {
+  margin-top: 20px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.hero-image img {
+  width: 420px;
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+/* COLORS */
+.blue {
+  color: #5b6cff;
+}
+.pink {
+  color: #ff5c8a;
+}
 
 /* SECTION TITLE */
 .feature-row h2 {
