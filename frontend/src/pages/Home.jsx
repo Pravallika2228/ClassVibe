@@ -9,40 +9,9 @@ export default function Home({ onTeacher, onStudent }) {
       </header>
 
       <main>
-
-        <div className="hero-wrapper">
-          <div className="hero-container">
-
-            <h1>
-              Welcome to <span id="name">ClassVibe</span>
-            </h1>
-
-            <p className="sub1">
-              Interactive classroom engagement made simple. Connect with <br />
-              your students in real-time and create an engaging learning environment.
-            </p>
-
-            <div className="hero">
-              <div className="hero-text">
-                <h2>
-                  Bridging the Gap Between <br />
-                  <span className="blue">Teaching</span> and <br />
-                  <span className="pink">Learning.</span>
-                </h2>
-                <p>
-                  Interactive classroom engagement made simple. Connect with<br /> your students
-                  in real-time and create an engaging learning<br /> environment that students love.
-                </p>
-              </div>
-              <div className="hero-image">
-                <img src="/css/demo.png" alt="demo" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-
-        {/* <div className="home-inner">
+        
+        
+        <div className="home-inner">
           <h1>
             Welcome to <span id="name">ClassVibe</span>
           </h1>
@@ -66,7 +35,7 @@ export default function Home({ onTeacher, onStudent }) {
             <div className="hero-image">
               <img src="/css/demo.png" alt="demo" />
             </div>
-          </div>           */}
+          </div>          
 
           <div className="row feature-row">
             <div className="col-1">
@@ -145,7 +114,7 @@ export default function Home({ onTeacher, onStudent }) {
               </div>
             </div>
           </div>
-        
+        </div>
       </main>
 
       <footer>
