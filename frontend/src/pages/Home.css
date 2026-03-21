@@ -73,10 +73,17 @@ main { padding-top: 64px; }
   font-weight: 700;
 }
 
+#name { 
+    -webkit-text-stroke: 1px #32719b;
+    color: aliceblue;
+    font-weight: 300;
+ }
+
 .sub1 {
   text-align: center;
   margin-top: 10px;
   color: #64748b;
+  gap: 25px;
 }
 
 /* HERO SECTION */
