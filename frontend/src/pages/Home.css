@@ -48,15 +48,92 @@ header h2{
 /* Prevent content hiding behind fixed header */
 main { padding-top: 64px; }
 
+/* OUTER WRAPPER (background spacing) */
+.hero-wrapper {
+  background: #f1f5f9;   /* light background like design */
+  padding: 60px 20px;
+}
+
+/* MAIN CONTAINER (THE BOX YOU WANT) */
+.hero-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 60px;
+
+  background: #ffffff;
+  border-radius: 20px;
+
+  box-shadow: 0 20px 60px rgba(0,0,0,0.08);
+}
+
+/* TOP TEXT CENTER */
+.hero-container h1 {
+  text-align: center;
+  font-size: 32px;
+  font-weight: 700;
+}
+
+.sub1 {
+  text-align: center;
+  margin-top: 10px;
+  color: #64748b;
+}
+
+/* HERO SECTION */
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-top: 50px;
+  gap: 60px;
+}
+
+/* TEXT SIDE */
+.hero-text {
+  flex: 1;
+  max-width: 520px;
+}
+
+/* IMAGE SIDE */
+.hero-image {
+  flex: 1;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.hero-image img {
+  width: 480px;
+  border-radius: 20px;
+
+  box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+}
+
+/* COLORS */
+.blue { color: #5b6cff; }
+.pink { color: #ff5c8a; }
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .hero {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .hero-image {
+    justify-content: center;
+  }
+}
+
 /* Page container / hero */
-.home {
+/* .home {
   max-width: 1100px;
   margin: 18px auto;
   padding: 0 16px;
 }
 
 /* Main title */
-h1 {
+/* h1 {
   text-align: center;
   font-size: 44px;
   margin: 28px 0 10px;
@@ -69,10 +146,10 @@ h1 {
  }
 
 /* Subtitles */
-.sub1 { text-align:center; color:#526577; max-width:640px; margin: 0 auto 30px; padding: 0 8px; font-size:18px; }
+/* .sub1 { text-align:center; color:#526577; max-width:640px; margin: 0 auto 30px; padding: 0 8px; font-size:18px; } */
 
 /* ================= HERO ================= */
-.hero {
+/* .hero {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -103,7 +180,7 @@ h1 {
   border-radius: 20px;
   box-shadow: 0 20px 50px rgba(0,0,0,0.1);
   transform: translateX(60px);
-}
+} */ 
 
 /* COLORS */
 .blue {
