@@ -38,7 +38,7 @@ export default function Home({ onTeacher, onStudent }) {
           </div>          
           <div className="subtitle">
             <h2>Powerful Tools for Modern Education</h2>
-              <p className="subtitle1">
+              <p >
                 We’ve built ClassConnect from the ground up to solve the challenges of real-time digital interaction
               </p>
           </div>
