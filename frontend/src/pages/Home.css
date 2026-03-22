@@ -129,6 +129,11 @@ h1 {
   color: #0f172a;
 }
 
+.subtitle{
+  margin-top: 30px;
+  margin-bottom: 30px;
+}
+
 .subtitle h2 {
   text-align: center;
   font-size: 18px;
