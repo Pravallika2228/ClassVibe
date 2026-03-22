@@ -138,6 +138,7 @@ h1 {
 .subtitle h2 {
   text-align: center;
   font-size: 18px;
+  font-weight: 200px;
 }
 
 .subtitle p{
@@ -146,6 +147,7 @@ h1 {
   margin: 10px auto 50px;
   color: #64748b;
   font-size: 14px;
+  font-weight: 150;
 }
 
 /* CARD ROW */
@@ -204,7 +206,7 @@ h1 {
   font-size: 18px;
   margin-top: 50px;
   margin-bottom: 30px;
-  color:red;
+  font-weight: 150;
 }
 .sub2{
   text-align: center;
