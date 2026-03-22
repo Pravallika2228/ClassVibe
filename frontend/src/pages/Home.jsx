@@ -75,7 +75,7 @@ export default function Home({ onTeacher, onStudent }) {
             <div className="col-1">
               <div className="feature-card">
                 <img
-                  src="/css/all.min.css/class.png"
+                  src="/css/class.png"
                   alt="Management"
                   className="big-icon"
                 />
