@@ -63,7 +63,7 @@ export default function Home({ onTeacher, onStudent }) {
             <div className="col-1">
               <div className="feature-card">
                 <img
-                  src="/css/all.min.css/real.png"
+                  src="/css/real.png"
                   alt="chat"
                   className="big-icon"
                 />
