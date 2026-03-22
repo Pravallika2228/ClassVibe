@@ -36,7 +36,12 @@ export default function Home({ onTeacher, onStudent }) {
               <img src="/css/demo.png" alt="demo" />
             </div>
           </div>          
-
+          <div>
+            <h2>Powerful Tools for Modern Education</h2>
+              <p className="subtitle">
+                We’ve built ClassConnect from the ground up to solve the challenges of real-time digital interaction
+              </p>
+          </div>
           <div className="row feature-row">
             <div className="col-1">
               <div className="feature-card">
@@ -54,10 +59,6 @@ export default function Home({ onTeacher, onStudent }) {
             </div>
 
             <div className="col-1">
-              <h2>Powerful Tools for Modern Education</h2>
-              <p className="subtitle">
-                We’ve built ClassConnect from the ground up to solve the challenges of real-time digital interaction
-              </p>
               <div className="feature-card">
                 <img
                   src="/css/all.min.css/real.png"
