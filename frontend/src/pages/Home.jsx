@@ -43,8 +43,8 @@ export default function Home({ onTeacher, onStudent }) {
                 We’ve built ClassConnect from the ground up to solve the challenges of real-time digital interaction
               </p>
           </div>
-          
-          <div className="row feature-row">
+
+          <div className="feature-row">
             <div className="col-1">
               <div className="feature-card">
                 <img
@@ -92,7 +92,7 @@ export default function Home({ onTeacher, onStudent }) {
             <div className="col-2">
               <div className="role-card">
                 <img
-                  src="/css/all.min.css/teacher.png"
+                  src="/css/user.png"
                   alt="Teacher"
                   className="big-icon"
                 />
@@ -106,7 +106,7 @@ export default function Home({ onTeacher, onStudent }) {
             <div className="col-2">
               <div className="role-card">
                 <img
-                  src="/css/all.min.css/student.png"
+                  src="/css/qr.png"
                   alt="student"
                   className="big-icon"
                 />
