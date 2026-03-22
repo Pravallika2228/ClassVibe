@@ -88,34 +88,33 @@ export default function Home({ onTeacher, onStudent }) {
           <h2 className="mid">Choose Your Role</h2>
           <p className="sub2">Are you a teacher starting a session or a student joining one?</p>
 
-          <div className="row">
+          <div className="row role-row">
             <div className="col-2">
-              <div className="role-card">
-                <img
-                  src="/css/user.png"
-                  alt="Teacher"
-                  className="big-icon"
-                />
+              <div className="role-card teacher-card">
+                <div className="overlay"></div>
+
+                <img src="/css/user.png" alt="Teacher" className="icon-top" />
+
                 <h2>Teacher</h2>
-                <p>Create a classroom and start<br /> engaging with your students</p>
-                <br />
+                <p>Create a virtual classroom, prepare interactive polls, and lead your students in real-time engagement.</p>
+
                 <button className="btn" onClick={onTeacher}>Start as Teacher</button>
               </div>
             </div>
 
             <div className="col-2">
-              <div className="role-card">
-                <img
-                  src="/css/qr.png"
-                  alt="student"
-                  className="big-icon"
-                />
+              <div className="role-card student-card">
+                <div className="overlay"></div>
+
+                <img src="/css/qr.png" alt="student" className="icon-top" />
+
                 <h2>Student</h2>
-                <p>Join a classroom using a PIN<br />code or by scanning a QR code</p>
-                <br />
+                <p>Enter a session PIN or scan a QR code to instantly join your teacher's live interactive classroom.</p>
+
                 <button className="btn-1" onClick={onStudent}>Join as Student</button>
               </div>
             </div>
+            
           </div>
         </div>
       </main>

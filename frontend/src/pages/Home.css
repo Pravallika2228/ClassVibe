@@ -239,17 +239,89 @@ h1 {
   }
 }
 
-/* Buttons: simple */
-.btn, .btn-1{
-  display:inline-block;
-  padding:10px 14px;
-  border-radius:24px;
-  border:none;
-  background:black; /* simple blue */
-  color:#fff;
-  font-weight:600;
-  cursor:pointer;
-  text-decoration: none;
+/* ROW */
+.role-row {
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  margin-top: 40px;
+}
+
+/* CARD BASE */
+.role-card {
+  position: relative;
+  width: 400px;
+  height: 250px;
+  border-radius: 16px;
+  overflow: hidden;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+
+  color: #fff;
+  text-align: center;
+
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+/* BACKGROUND IMAGES */
+.teacher-card {
+  background: url("/css/teacher.png") center/cover no-repeat;
+}
+
+.student-card {
+  background: url("/css/student.png") center/cover no-repeat;
+}
+
+/* DARK OVERLAY */
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+}
+
+/* ICON ON TOP */
+.icon-top {
+  position: relative;
+  width: 40px;
+  margin-bottom: 10px;
+  z-index: 2;
+}
+
+/* TEXT */
+.role-card h2 {
+  position: relative;
+  z-index: 2;
+  font-size: 20px;
+  margin-bottom: 10px;
+}
+
+.role-card p {
+  position: relative;
+  z-index: 2;
+  font-size: 13px;
+  max-width: 260px;
+  margin-bottom: 15px;
+}
+
+/* BUTTON */
+.btn, .btn-1 {
+  position: relative;
+  z-index: 2;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  background: #5b6cff;
+  color: white;
+  cursor: pointer;
+}
+
+/* HOVER EFFECT */
+.role-card:hover {
+  transform: scale(1.05);
 }
 
 /* Social icons in footer */
