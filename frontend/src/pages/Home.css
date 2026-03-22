@@ -199,6 +199,18 @@ h1 {
   color: #64748b;
 }
 
+.mid{
+  text-align: center;
+  font-size: 18px;
+  margin-top: 50px;
+  margin-bottom: 30px;
+}
+.sub2{
+  text-align: center;
+  color:#6b7b86; 
+  margin-bottom:30px;
+}
+
 /* ================= FIX ALIGNMENT ISSUE ================= */
 
 /* REMOVE WRONG CENTER COLUMN BEHAVIOR */
