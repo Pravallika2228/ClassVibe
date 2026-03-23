@@ -88,7 +88,7 @@ export default function Home({ onTeacher, onStudent }) {
           <h2 className="mid">Choose Your Role</h2>
           <p className="sub2">Are you a teacher starting a session or a student joining one?</p>
 
-          <div className="role-row">
+          <div className="row role-row">
             <div className="col-2">
               <div className="role-card teacher-card">
                 <div className="overlay"></div>
