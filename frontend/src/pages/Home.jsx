@@ -93,7 +93,7 @@ export default function Home({ onTeacher, onStudent }) {
               <div className="role-card teacher-card">
                 <div className="overlay"></div>
 
-                <img src="/css/user.png" alt="Teacher" className="icon-top" />
+                <img src="/frontend/public/css/user.png" alt="Teacher" className="icon-top" />
 
                 <h2>Teacher</h2>
                 <p>Create a virtual classroom, prepare interactive polls, and lead your students in real-time engagement.</p>
