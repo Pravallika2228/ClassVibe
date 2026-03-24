@@ -61,11 +61,13 @@ h1 {
   font-size: 44px;
   margin: 28px 0 10px;
   color: #0b2a44;
+  font-family: Archivo;
 }
 #name { 
     -webkit-text-stroke: 1px #32719b;
     color: aliceblue;
     font-weight: 300;
+    font-family: Archivo;
  }
 
 /* Subtitles */
@@ -83,6 +85,7 @@ h1 {
 
 .hero-text {
   flex: 1;
+  font-family: Archivo;
 }
 
 .hero-text h2 {
