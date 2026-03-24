@@ -353,7 +353,7 @@ footer .social-links ul {
 /* Small responsive adjustments */
 @media (max-width: 780px) {
   h1 { font-size: 28px; margin-top: 12px; }
-  .col-1, .col-2 { width:100%; }
+  .col-1{ width:100%; }
   main { padding-top:72px; }
   header h2 { font-size:18px; }
 }
