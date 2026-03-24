@@ -362,5 +362,7 @@ a{
 }
 
 .col-2 {
+  flex: 1;
+  max-width: 300px;
   width: 400px;
 }
