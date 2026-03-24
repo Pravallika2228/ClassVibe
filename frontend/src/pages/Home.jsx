@@ -122,9 +122,9 @@ export default function Home({ onTeacher, onStudent }) {
       <footer>
         <div className="social-links">
           <ul>
-            <li><img src="/css/all.min.css/instagram.png" alt="instagram" /></li>
-            <li><img src="/css/all.min.css/linkedin.png" alt="linkedin" /></li>
-            <li><img src="/css/all.min.css/telegram.png" alt="telegram" /></li>
+            <li><img src="/css/instagram.png" alt="instagram" /></li>
+            <li><img src="/css/linkedin.png" alt="linkedin" /></li>
+            <li><img src="/css/telegram.png" alt="telegram" /></li>
           </ul>
         </div>
         © ClassVibe. Connecting classrooms worldwide.
