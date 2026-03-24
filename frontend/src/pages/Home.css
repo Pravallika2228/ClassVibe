@@ -280,11 +280,11 @@ h1 {
 
 /* BACKGROUND IMAGES */
 .teacher-card {
-  background: url("/css/teacher.jpg") center/cover no-repeat;
+  background: url("/css/teacher.png") center/cover no-repeat;
 }
 
 .student-card {
-  background: url("/css/student.jpg") center/cover no-repeat;
+  background: url("/css/student.png") center/cover no-repeat;
 }
 
 /* DARK OVERLAY */
