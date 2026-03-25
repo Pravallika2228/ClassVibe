@@ -223,7 +223,8 @@ h1 {
 
 /* BACKGROUND IMAGES */
 .role-card {
-  background-size: cover;
+  background-size: contain;
+  background-repeat: no-repeat;
   background-position: center;
 }
 
