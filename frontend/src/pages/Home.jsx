@@ -1,5 +1,7 @@
 import React from "react";
 import "./Home.css";
+import teacherImg from "../assets/teacher.png";
+import studentImg from "../assets/student.png";
 
 export default function Home({ onTeacher, onStudent }) {
   return (
@@ -90,7 +92,10 @@ export default function Home({ onTeacher, onStudent }) {
 
           <div className="role-row">
             <div className="col-2">
-              <div className="role-card teacher-card">
+              <div
+                  className="role-card"
+                  style={{ backgroundImage: `url(${studentImg})` }}
+                >
                 <div className="overlay"></div>
 
                 <img src="/css/user.png" alt="Teacher" className="icon-top" />
@@ -103,7 +108,10 @@ export default function Home({ onTeacher, onStudent }) {
             </div>
 
             <div className="col-2">
-              <div className="role-card student-card">
+              <div
+                  className="role-card"
+                  style={{ backgroundImage: `url(${studentImg})` }}
+                >
                 <div className="overlay"></div>
 
                 <img src="/css/qr.png" alt="student" className="icon-top" />

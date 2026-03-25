@@ -223,7 +223,7 @@ h1 {
 
 /* BACKGROUND IMAGES */
 .teacher-card {
-  background: url("/css/teacher.png") center/cover no-repeat;
+  background: url("../../public/css/teacher.png") center/cover no-repeat;
 }
 
 .student-card {
