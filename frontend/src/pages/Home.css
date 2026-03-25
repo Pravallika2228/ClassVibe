@@ -285,7 +285,7 @@ h1 {
 }
 
 .student-card {
-  background: url("/css/student.png") center/cover no-repeat;
+  background: url("/frontend/public/css/student.png") center/cover no-repeat;
 }
 
 /* DARK OVERLAY */
