@@ -222,12 +222,9 @@ h1 {
 }
 
 /* BACKGROUND IMAGES */
-.teacher-card {
-  background: url("../../public/css/teacher.png") center/cover no-repeat;
-}
-
-.student-card {
-  background: url("/css/student.png") center/cover no-repeat;
+.role-card {
+  background-size: cover;
+  background-position: center;
 }
 
 /* GRADIENT OVERLAY — richer than a flat rgba */
