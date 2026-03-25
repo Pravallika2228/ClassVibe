@@ -94,7 +94,7 @@ export default function Home({ onTeacher, onStudent }) {
             <div className="col-2">
               <div
                   className="role-card"
-                  style={{ backgroundImage: `url(${studentImg})` }}
+                  style={{ backgroundImage: `url(${teacherImg})` }}
                 >
                 <div className="overlay"></div>
 
