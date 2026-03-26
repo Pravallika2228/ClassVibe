@@ -92,9 +92,8 @@ h1 {
 .hero-text p {
   margin-top: 20px;
   font-size: 15px;
-  font-family: 'Archivo';
   color: #64748b;
-  max-width: 460px;
+  max-width: 550px;
   line-height: 1.8;
 }
 
@@ -267,11 +266,15 @@ h1 {
   height: 40px;
   font-family: 'Archivo';
   z-index: 2;
-  background: rgb(255, 255, 255);
+  background: rgba(245, 244, 244, 0.021);
   border-radius: 50%;
   padding: 7px;
   -webkit-backdrop-filter: blur(4px);
   backdrop-filter: blur(4px);
+}
+
+.icon-top p {
+  color: #f8f9fa;
 }
 
 /* TEXT */

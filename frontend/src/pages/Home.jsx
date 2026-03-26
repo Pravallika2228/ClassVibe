@@ -25,7 +25,7 @@ export default function Home({ onTeacher, onStudent }) {
           <div className="hero">
             <div className="hero-text">
               <h2>
-                Bridging the Gap Between <br />
+                Bridging the Gap Between 
                 <span className="blue">Teaching</span> and <br />
                 <span className="pink">Learning.</span>
               </h2>
