@@ -387,7 +387,7 @@ a { text-decoration: none; }
 }
 
 @media (max-width: 780px) {
-  h1 { font-size: 32px; }
+  h1 { font-size: 32px; font-family: 'Archivo';}
   .hero-text h2 { font-size: 36px; }
   main { padding-top: 70px; }
   header h2 { font-size: 18px; }
