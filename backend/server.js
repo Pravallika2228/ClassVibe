@@ -74,7 +74,7 @@ const { startSessionReminderJob } = require('./jobs/sessionReminder');
 const quizTestRoutes = require('./routes/quiz-test');
 
 // Add this with other app.use routes (around line 50)
-app.use('/api/quiz', quizTestRoutes);
+
 // ============================================
 // USE ROUTES (Add after other app.use routes)
 // ============================================
@@ -100,20 +100,10 @@ if (process.env.ENABLE_SESSION_REMINDERS !== 'false') {
   console.log('⏸️ Session reminder job is disabled');
 }
 
-console.log("REQ BODY:", req.body);
+app.post('/api/quiz/generate', async (req, res) => {
+  const { topic, numberOfQuestions, difficulty } = req.body;
 
-const handleGenerate = async () => {
-  await generateQuiz({
-    topic,
-    numberOfQuestions,
-    difficulty
-  });
-};
-
-await api.post('/quiz/generate', {
-  topic: quizTopic,
-  numberOfQuestions: num,
-  difficulty: level
+  // generate quiz logic here
 });
 
 // ============================================
