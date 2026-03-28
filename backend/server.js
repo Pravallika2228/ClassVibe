@@ -70,7 +70,11 @@ const quizRoutes = require('./routes/quiz');                    // ⭐ ADD THIS
 const analyticsRoutes = require('./routes/analytics');          // ⭐ ADD THIS
 const notificationRoutes = require('./routes/notifications');   // ⭐ ADD THIS
 const { startSessionReminderJob } = require('./jobs/sessionReminder');
+// Add this with other route imports (around line 20)
+const quizTestRoutes = require('./routes/quiz-test');
 
+// Add this with other app.use routes (around line 50)
+app.use('/api/quiz', quizTestRoutes);
 // ============================================
 // USE ROUTES (Add after other app.use routes)
 // ============================================
