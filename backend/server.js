@@ -110,6 +110,12 @@ const handleGenerate = async () => {
   });
 };
 
+await api.post('/quiz/generate', {
+  topic: quizTopic,
+  numberOfQuestions: num,
+  difficulty: level
+});
+
 // ============================================
 // MIDDLEWARE
 // ============================================
