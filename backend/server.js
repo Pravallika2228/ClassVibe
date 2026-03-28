@@ -100,6 +100,15 @@ if (process.env.ENABLE_SESSION_REMINDERS !== 'false') {
   console.log('⏸️ Session reminder job is disabled');
 }
 
+console.log("REQ BODY:", req.body);
+
+const handleGenerate = async () => {
+  await generateQuiz({
+    topic,
+    numberOfQuestions,
+    difficulty
+  });
+};
 
 // ============================================
 // MIDDLEWARE
