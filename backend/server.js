@@ -107,11 +107,29 @@ if (process.env.ENABLE_SESSION_REMINDERS !== 'false') {
 
 // ✅ CORS Configuration - THIS WAS MISSING!
 
+// ✅ FIX: CORS must come FIRST, then body parsers
+app.use(cors({
+  origin: [
+    process.env.FRONTEND_URL,
+    "http://localhost:3000"
+  ],
+  credentials: true
+}));
 
-app.options('*', cors());
+// ✅ FIX: Increase body size limits
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true, limit: '50mb'  }));
+// ✅ FIX: Add explicit logging
+app.use((req, res, next) => {
+  if (req.method === 'POST' || req.method === 'PUT') {
+    console.log(`📥 ${req.method} ${req.path}`, {
+      hasBody: !!req.body,
+      contentType: req.headers['content-type']
+    });
+  }
+  next();
+});
 
 // ... rest of your code continues here
 // ============================================
