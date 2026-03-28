@@ -111,7 +111,7 @@ if (process.env.ENABLE_SESSION_REMINDERS !== 'false') {
 app.options('*', cors());
 
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '50mb'  }));
 
 // ... rest of your code continues here
 // ============================================
