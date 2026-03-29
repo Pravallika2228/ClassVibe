@@ -77,6 +77,8 @@ const authenticateToken = (req, res, next) => {
 // Generate quiz from text topic
 router.post('/generate', authenticateToken, async (req, res) => {
   try {
+    console.log("📥 REQUEST BODY:", req.body);
+    console.log("🔑 GEMINI KEY:", process.env.GEMINI_API_KEY ? "FOUND" : "MISSING");
     console.log('📥 Generate quiz request:', {
       userId: req.userId,
       body: req.body,
@@ -170,10 +172,12 @@ router.post('/generate', authenticateToken, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Generate quiz error:', error);
+    console.error('❌ FULL ERROR:', error);
+
     res.status(500).json({ 
       error: 'Failed to generate quiz',
-      details: error.message
+      details: error.message,
+      stack: error.stack   // ⭐ VERY IMPORTANT (temporary)
     });
   }
 });
