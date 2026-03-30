@@ -10,7 +10,7 @@ class AIQuizGenerator {
   constructor() {
     this.apiKey = process.env.GEMINI_API_KEY;
     // ✅ FIX: Use gemini-1.5-flash (modern, faster model)
-    this.apiUrl = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent';
+    this.apiUrl = 'https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent';
   }
 
   /**
