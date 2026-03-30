@@ -183,7 +183,14 @@ Return ONLY a valid JSON array:
 
       const generatedText = response.data.candidates[0].content.parts[0].text;
       const jsonText = this.extractJSON(generatedText);
-      const questions = JSON.parse(jsonText);
+      let questions;
+
+        try {
+          questions = JSON.parse(jsonText);
+        } catch (err) {
+          console.error("❌ JSON PARSE ERROR:", jsonText);
+          throw new Error("AI returned invalid JSON format");
+        }
       
       return this.validateQuestions(questions);
       
