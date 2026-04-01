@@ -7,9 +7,13 @@ const SOCKET_URL =
 
 const socket = io(SOCKET_URL, {
   path: "/socket.io",
-  transports: ["websocket"],
+  transports: ["polling", "websocket"],  // ✅ polling FIRST, then upgrade to websocket
   withCredentials: true,
-  autoConnect: false
+  autoConnect: false,
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 2000,
+  timeout: 20000,
 });
 
 export default socket;

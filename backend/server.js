@@ -47,11 +47,15 @@ app.use(cors({
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL,
+    origin: [
+      process.env.FRONTEND_URL,
+      "http://localhost:3000",
+      "http://192.168.1.131:3000"
+    ].filter(Boolean),
     methods: ["GET", "POST"],
     credentials: true
   },
-  transports: ["websocket", "polling"]
+  transports: ["polling", "websocket"]  // polling first
 });
 
 app.set('io', io); 
@@ -104,7 +108,7 @@ if (process.env.ENABLE_SESSION_REMINDERS !== 'false') {
   console.log('⏸️ Session reminder job is disabled');
 }
 
-const { setupQuizSocketHandlers, cleanupQuizTimers } = require('./socket-handlers/quiz-socket-handlers');
+const { setupQuizSocketHandlers, cleanupQuizTimers } = require('./socket-handlers/quiz-socket-handler');
 
 // In socket connection
 io.on('connection', (socket) => {
@@ -121,16 +125,6 @@ process.on('SIGTERM', () => {
 // ============================================
 // MIDDLEWARE
 // ============================================
-
-
-// ✅ FIX: CORS must come FIRST, then body parsers
-app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL,
-    "http://localhost:3000"
-  ],
-  credentials: true
-}));
 
 
 // ✅ FIX: Add explicit logging
