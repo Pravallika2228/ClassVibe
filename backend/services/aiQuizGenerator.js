@@ -10,7 +10,7 @@ class AIQuizGenerator {
   constructor() {
     this.apiKey = process.env.GROQ_API_KEY;
     this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    this.model = 'llama3-8b-8192'; // Free, fast Groq model
+    this.model = 'llama-3.1-8b-instant'; // Free, fast Groq model
   }
 
   /**
