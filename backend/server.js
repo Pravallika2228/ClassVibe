@@ -108,17 +108,13 @@ if (process.env.ENABLE_SESSION_REMINDERS !== 'false') {
   console.log('⏸️ Session reminder job is disabled');
 }
 
-const { setupQuizSocketHandlers, cleanupQuizTimers } = require('./socket-handlers/quiz-socket-handlers');
-
 // In socket connection
 io.on('connection', (socket) => {
   // ... existing auth ...
-  setupQuizSocketHandlers(io, socket);
 });
 
 // Add cleanup
 process.on('SIGTERM', () => {
-  cleanupQuizTimers();
   server.close();
 });
 

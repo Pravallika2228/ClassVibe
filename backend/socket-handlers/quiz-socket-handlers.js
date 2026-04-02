@@ -122,6 +122,19 @@ function setupQuizSocketHandlers(io, socket) {
     }
   });
 
+  // backend/socket-handlers/quiz-socket-handler.js
+
+    const setupQuizSocketHandlers = (io, socket) => {
+      // Quiz socket handlers will go here
+      console.log('Quiz socket handler initialized for:', socket.id);
+    };
+
+    const cleanupQuizTimers = () => {
+      console.log('Cleaning up quiz timers...');
+    };
+
+    module.exports = { setupQuizSocketHandlers, cleanupQuizTimers };
+
   /**
    * Teacher ends quiz
    */
