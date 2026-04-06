@@ -1,3 +1,6 @@
+// frontend/src/components/FloatingQuizButton.jsx
+// Fixed version with proper error handling and authentication
+
 import React, { useState, useEffect, useCallback } from 'react';
 
 const FloatingQuizButton = ({ 
@@ -10,46 +13,93 @@ const FloatingQuizButton = ({
   const [quizSession, setQuizSession] = useState(null);
   const [pulse, setPulse] = useState(false);
 
-  // ✅ FIX: useCallback added
+  // ✅ FIX: Better error handling and authentication
   const checkActiveQuiz = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
 
+      if (!token) {
+        console.warn('⚠️ No auth token found');
+        return;
+      }
+
       const response = await fetch(
         `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/quiz/group/${groupId}/active`,
         {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { 
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
         }
       );
+
+      // ✅ FIX: Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn(`⚠️ API returned non-JSON response (${response.status})`);
+        return;
+      }
+
+      // ✅ FIX: Handle non-200 responses gracefully
+      if (!response.ok) {
+        if (response.status === 403) {
+          console.error('🚫 Access forbidden - authentication failed');
+        } else if (response.status === 404) {
+          console.log('ℹ️ No active quiz found');
+        } else if (response.status === 401) {
+          console.error('🔐 Unauthorized - please log in again');
+        } else {
+          console.warn(`⚠️ Unexpected response: ${response.status}`);
+        }
+        return;
+      }
 
       const data = await response.json();
 
       if (data.session) {
+        console.log('✅ Active quiz found:', data.session._id);
         setQuizSession(data.session);
+      } else {
+        console.log('ℹ️ No active quiz session');
+        setQuizSession(null);
       }
     } catch (error) {
-      console.error('Check active quiz error:', error);
+      // ✅ FIX: Better error categorization
+      if (error.name === 'SyntaxError') {
+        console.error('❌ Invalid JSON response from server (possible HTML error page)');
+      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        console.error('❌ Network error - cannot reach server');
+      } else {
+        console.error('❌ Check active quiz error:', error.message);
+      }
     }
   }, [groupId]);
 
   useEffect(() => {
     if (!socket || !groupId) return;
 
+    // Listen for quiz started (teacher published)
     socket.on('quizStarted', (data) => {
+      console.log('🎮 Quiz started event received');
       setQuizSession({ status: 'waiting', ...data });
       setPulse(true);
       setTimeout(() => setPulse(false), 2000);
     });
 
+    // Listen for quiz began (teacher clicked "Start Quiz")
     socket.on('quizBegan', () => {
+      console.log('🚀 Quiz began event received');
       setQuizSession(prev => ({ ...prev, status: 'active' }));
     });
 
+    // Listen for quiz ended
     socket.on('quizEnded', () => {
+      console.log('🏁 Quiz ended event received');
       setQuizSession(null);
     });
 
-    // ✅ FIX: now safe
+    // Initial check for active quiz
     checkActiveQuiz();
 
     return () => {
@@ -57,20 +107,21 @@ const FloatingQuizButton = ({
       socket.off('quizBegan');
       socket.off('quizEnded');
     };
-  }, [socket, groupId, checkActiveQuiz]); // ✅ added dependency
+  }, [socket, groupId, checkActiveQuiz]);
 
   const handleClick = () => {
     if (isTeacher) {
+      // Teacher always opens quiz creator
       onCreateQuiz(quizSession || null);
     } else {
+      // Student checks if quiz is available
       if (quizSession) {
         onJoinQuiz(quizSession);
       } else {
-        alert('No quiz available. Wait for your teacher to create one!');
+        alert('📝 No quiz available right now!\n\nWait for your teacher to create and publish a quiz.');
       }
     }
   };
-
 
   const getButtonContent = () => {
     if (!quizSession) {
@@ -123,8 +174,10 @@ const FloatingQuizButton = ({
         ...styles.button,
         backgroundColor: content.color,
         boxShadow: pulse 
-          ? `0 0 30px ${content.shadowColor}` 
-          : `0 4px 20px ${content.shadowColor}`
+          ? `0 0 30px ${content.shadowColor}, 0 0 50px ${content.shadowColor}` 
+          : `0 4px 20px ${content.shadowColor}`,
+        transform: pulse ? 'scale(1.1)' : 'scale(1)',
+        transition: 'all 0.3s ease'
       }}
     >
       <div style={styles.emoji}>{content.emoji}</div>
@@ -154,11 +207,25 @@ const styles = {
     justifyContent: 'center',
     cursor: 'pointer',
     zIndex: 999,
-    border: '4px solid white'
+    border: '4px solid white',
+    userSelect: 'none'
   },
-  emoji: { fontSize: '32px' },
-  text: { fontSize: '12px', color: 'white', fontWeight: '800' },
-  subtext: { fontSize: '9px', color: 'white' },
+  emoji: { 
+    fontSize: '32px',
+    marginBottom: '2px'
+  },
+  text: { 
+    fontSize: '12px', 
+    color: 'white', 
+    fontWeight: '800',
+    letterSpacing: '0.5px'
+  },
+  subtext: { 
+    fontSize: '9px', 
+    color: 'white',
+    fontWeight: '600',
+    opacity: 0.95
+  },
   badge: {
     position: 'absolute',
     top: '-5px',
@@ -170,7 +237,11 @@ const styles = {
     height: '28px',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    fontSize: '12px',
+    fontWeight: '700',
+    border: '2px solid white',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
   }
 };
 

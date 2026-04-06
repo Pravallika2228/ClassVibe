@@ -1,8 +1,10 @@
 // backend/socket-handlers/quiz-socket-handlers.js
-// Server-Side Synchronized Quiz Timer Management
+// Server-Side Synchronized Quiz with Streak System & Chat Notifications
 
 const QuizSession = require('../models/QuizSession');
 const Quiz = require('../models/Quiz');
+const Message = require('../models/Message'); // For chat notifications
+const User = require('../models/User'); // For winner name
 
 // Store active quiz timers
 const activeQuizTimers = new Map();
@@ -55,10 +57,14 @@ function setupQuizSocketHandlers(io, socket) {
           questionText: firstQuestion.questionText,
           options: firstQuestion.options,
           timeLimit: questionTimeLimit,
-          points: firstQuestion.points || 10
+          points: firstQuestion.points || 10,
+          questionType: firstQuestion.questionType || 'multiple_choice'
         },
         totalQuestions: session.quiz.questions.length
       });
+
+      // ✅ NEW: Send chat notification (Quiz Started)
+      await sendChatNotification(io, session, 'quiz_started');
 
       console.log('✅ Quiz started successfully');
 
@@ -110,7 +116,8 @@ function setupQuizSocketHandlers(io, socket) {
           questionText: nextQuestion.questionText,
           options: nextQuestion.options,
           timeLimit: questionTimeLimit,
-          points: nextQuestion.points || 10
+          points: nextQuestion.points || 10,
+          questionType: nextQuestion.questionType || 'multiple_choice'
         },
         totalQuestions: session.quiz.questions.length
       });
@@ -122,19 +129,6 @@ function setupQuizSocketHandlers(io, socket) {
     }
   });
 
-  // backend/socket-handlers/quiz-socket-handler.js
-
-    const setupQuizSocketHandlers = (io, socket) => {
-      // Quiz socket handlers will go here
-      console.log('Quiz socket handler initialized for:', socket.id);
-    };
-
-    const cleanupQuizTimers = () => {
-      console.log('Cleaning up quiz timers...');
-    };
-
-    module.exports = { setupQuizSocketHandlers, cleanupQuizTimers };
-
   /**
    * Teacher ends quiz
    */
@@ -142,7 +136,7 @@ function setupQuizSocketHandlers(io, socket) {
     try {
       const { sessionId } = data;
       
-      const session = await QuizSession.findById(sessionId);
+      const session = await QuizSession.findById(sessionId).populate('quiz');
       if (!session) return;
 
       // Verify teacher is host
@@ -157,10 +151,17 @@ function setupQuizSocketHandlers(io, socket) {
       session.status = 'completed';
       await session.save();
 
+      // Get final leaderboard
+      const leaderboard = getLeaderboard(session);
+
+      // ✅ NEW: Send chat notification with winner
+      await sendChatNotification(io, session, 'quiz_ended', leaderboard);
+
       // Broadcast quiz ended
       io.to(sessionId).emit('quiz:ended', {
         sessionId,
-        message: 'Quiz has ended'
+        message: 'Quiz has ended',
+        leaderboard
       });
 
       console.log('🏁 Quiz ended:', sessionId);
@@ -202,7 +203,8 @@ function setupQuizSocketHandlers(io, socket) {
           user: socket.userId,
           joinedAt: new Date(),
           answers: [],
-          score: 0
+          score: 0,
+          streak: 0 // ✅ NEW: Streak counter
         });
         await session.save();
       }
@@ -220,7 +222,8 @@ function setupQuizSocketHandlers(io, socket) {
           questionText: currentQuestion.questionText,
           options: currentQuestion.options,
           timeLimit: currentQuestion.timeLimit || 45,
-          points: currentQuestion.points || 10
+          points: currentQuestion.points || 10,
+          questionType: currentQuestion.questionType || 'multiple_choice'
         };
 
         timeRemaining = timerInfo ? timerInfo.timeRemaining : currentQuestion.timeLimit;
@@ -264,7 +267,25 @@ function setupQuizSocketHandlers(io, socket) {
 
       const question = session.quiz.questions[questionIndex];
       const isCorrect = selectedAnswer === question.correctAnswer;
-      const points = isCorrect ? (question.points || 10) : 0;
+      
+      // ✅ NEW: Speed Multiplier Scoring (Option B)
+      const basePoints = question.points || 10;
+      const timeLimit = question.timeLimit || 45;
+      const timeRemaining = timeLimit - (timeTaken || 0);
+      
+      let points = 0;
+      if (isCorrect) {
+        if (timeRemaining >= (timeLimit * 2/3)) {
+          // Fast answer (0-15s for 45s question): 2.0x multiplier
+          points = basePoints * 2;
+        } else if (timeRemaining >= (timeLimit * 1/3)) {
+          // Medium answer (16-30s): 1.5x multiplier
+          points = Math.floor(basePoints * 1.5);
+        } else {
+          // Slow answer (31-45s): 1.0x multiplier
+          points = basePoints;
+        }
+      }
 
       // Find participant and update
       const participantIndex = session.participants.findIndex(
@@ -278,6 +299,15 @@ function setupQuizSocketHandlers(io, socket) {
         );
 
         if (!alreadyAnswered) {
+          // ✅ NEW: Update streak
+          let currentStreak = session.participants[participantIndex].streak || 0;
+          if (isCorrect) {
+            currentStreak++;
+          } else {
+            currentStreak = 0; // Lose streak on wrong answer
+          }
+          session.participants[participantIndex].streak = currentStreak;
+
           // Add answer
           session.participants[participantIndex].answers.push({
             questionIndex,
@@ -300,8 +330,10 @@ function setupQuizSocketHandlers(io, socket) {
             correctAnswer: question.correctAnswer,
             isCorrect,
             points,
+            speedMultiplier: isCorrect ? (points / basePoints) : 0,
             explanation: question.explanation,
             currentScore: session.participants[participantIndex].score,
+            streak: currentStreak, // ✅ NEW: Send streak
             questionText: question.questionText,
             options: question.options
           });
@@ -315,7 +347,7 @@ function setupQuizSocketHandlers(io, socket) {
             ).length
           });
 
-          console.log(`✅ Answer recorded: ${isCorrect ? 'Correct' : 'Wrong'} (+${points} points)`);
+          console.log(`✅ Answer recorded: ${isCorrect ? 'Correct' : 'Wrong'} (+${points} points, Streak: ${currentStreak})`);
         }
       }
 
@@ -409,6 +441,25 @@ async function handleQuestionComplete(io, session, questionIndex) {
       p => p.answers.some(a => a.questionIndex === questionIndex)
     );
 
+    // ✅ NEW: Auto-submit for students who didn't answer (0 points, lose streak)
+    for (let participant of updatedSession.participants) {
+      const hasAnswered = participant.answers.some(a => a.questionIndex === questionIndex);
+      
+      if (!hasAnswered) {
+        participant.answers.push({
+          questionIndex,
+          selectedAnswer: null,
+          isCorrect: false,
+          points: 0,
+          timeTaken: question.timeLimit || 45,
+          answeredAt: new Date()
+        });
+        participant.streak = 0; // Lose streak
+      }
+    }
+    
+    await updatedSession.save();
+
     // Send answer summary to ALL students (even those who didn't answer)
     io.to(sessionId).emit('question:complete', {
       questionIndex,
@@ -420,7 +471,7 @@ async function handleQuestionComplete(io, session, questionIndex) {
       totalStudents: updatedSession.participants.length
     });
 
-    // Wait 5 seconds for students to review
+    // ✅ UPDATED: Wait 10 seconds for answer summary
     setTimeout(() => {
       // Show leaderboard
       const leaderboard = getLeaderboard(updatedSession);
@@ -431,7 +482,7 @@ async function handleQuestionComplete(io, session, questionIndex) {
         isLastQuestion: questionIndex >= updatedSession.quiz.questions.length - 1
       });
 
-      // If not last question, wait 8 seconds then auto-advance
+      // ✅ UPDATED: Wait 5 seconds for leaderboard (Total: 15s)
       if (questionIndex < updatedSession.quiz.questions.length - 1) {
         setTimeout(async () => {
           const nextIndex = questionIndex + 1;
@@ -453,24 +504,30 @@ async function handleQuestionComplete(io, session, questionIndex) {
               questionText: nextQuestion.questionText,
               options: nextQuestion.options,
               timeLimit: questionTimeLimit,
-              points: nextQuestion.points || 10
+              points: nextQuestion.points || 10,
+              questionType: nextQuestion.questionType || 'multiple_choice'
             },
             totalQuestions: updatedSession.quiz.questions.length
           });
 
           console.log(`➡️ Auto-advanced to question ${nextIndex + 1}`);
-        }, 8000); // 8 seconds to view leaderboard
+        }, 5000); // ✅ 5 seconds to view leaderboard
       } else {
         // Quiz complete
-        setTimeout(() => {
+        setTimeout(async () => {
+          const finalLeaderboard = getLeaderboard(updatedSession);
+          
+          // ✅ NEW: Send chat notification with winner
+          await sendChatNotification(io, updatedSession, 'quiz_ended', finalLeaderboard);
+          
           io.to(sessionId).emit('quiz:finished', {
-            leaderboard,
+            leaderboard: finalLeaderboard,
             message: 'Quiz completed!'
           });
           console.log('🏁 Quiz finished');
-        }, 8000);
+        }, 5000);
       }
-    }, 5000); // 5 seconds to review answer
+    }, 10000); // ✅ 10 seconds to review answer
 
   } catch (error) {
     console.error('❌ Question complete handler error:', error);
@@ -486,7 +543,8 @@ function getLeaderboard(session) {
       userId: p.user,
       score: p.score,
       correctAnswers: p.answers.filter(a => a.isCorrect).length,
-      totalAnswers: p.answers.length
+      totalAnswers: p.answers.length,
+      streak: p.streak || 0 // ✅ NEW: Include streak
     }))
     .sort((a, b) => {
       // Sort by score (descending), then by correct answers
@@ -499,6 +557,70 @@ function getLeaderboard(session) {
     }));
 
   return leaderboard;
+}
+
+/**
+ * ✅ NEW: Send chat notification
+ */
+async function sendChatNotification(io, session, type, leaderboard = null) {
+  try {
+    const groupId = session.group;
+    let messageContent = '';
+    let metadata = {
+      quizId: session.quiz._id,
+      sessionId: session._id
+    };
+
+    if (type === 'quiz_started') {
+      messageContent = `📝 Quiz Started: ${session.quiz.title}\n\nJoin now to participate! 🎮`;
+      
+      // Save to database
+      const message = await Message.create({
+        group: groupId,
+        messageType: 'quiz_started',
+        content: messageContent,
+        metadata
+      });
+
+      // Broadcast to group chat
+      io.to(groupId.toString()).emit('newMessage', {
+        message: message,
+        type: 'quiz_notification'
+      });
+
+      console.log('📢 Quiz started notification sent to group');
+    } 
+    else if (type === 'quiz_ended' && leaderboard && leaderboard.length > 0) {
+      const winner = leaderboard[0];
+      
+      // Get winner's name
+      const winnerUser = await User.findById(winner.userId);
+      const winnerName = winnerUser ? winnerUser.name : 'Unknown';
+      
+      messageContent = `🎉 Quiz "${session.quiz.title}" completed!\n\n🏆 Today's topper: ${winnerName} with ${winner.score} points!\n\nCheck your results in the quiz section.`;
+      
+      metadata.winnerId = winner.userId;
+      metadata.winnerScore = winner.score;
+      
+      // Save to database
+      const message = await Message.create({
+        group: groupId,
+        messageType: 'quiz_ended',
+        content: messageContent,
+        metadata
+      });
+
+      // Broadcast to group chat
+      io.to(groupId.toString()).emit('newMessage', {
+        message: message,
+        type: 'quiz_notification'
+      });
+
+      console.log(`📢 Quiz ended notification sent - Winner: ${winnerName}`);
+    }
+  } catch (error) {
+    console.error('❌ Chat notification error:', error);
+  }
 }
 
 // ========================================
