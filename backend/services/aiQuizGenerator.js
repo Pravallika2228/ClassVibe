@@ -2,7 +2,7 @@
 // Enhanced AI Quiz Generator with Multiple Question Types (Groq API)
 
 const axios = require('axios');
-const pdf = require('pdf-parse');
+const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 const fs = require('fs').promises;
 
@@ -158,7 +158,7 @@ CRITICAL: Return ONLY the JSON array, nothing else. No markdown formatting.`;
       try {
         if (ext === 'pdf') {
           const dataBuffer = await fs.readFile(filePath);
-          const pdfData = await pdf(dataBuffer);
+          const pdfData = await pdfParse(dataBuffer);
           fileContent = pdfData.text;
           
           if (!fileContent || fileContent.trim().length < 100) {
