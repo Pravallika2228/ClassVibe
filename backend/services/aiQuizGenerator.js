@@ -417,6 +417,16 @@ Return ONLY a valid JSON array with this EXACT structure:
         });
 
         // Ensure correctAnswer is valid number
+        if (typeof q.correctAnswer === 'string') {
+          const letterMap = { 'a': 0, 'b': 1, 'c': 2, 'd': 3 };
+          const lower = q.correctAnswer.trim().toLowerCase();
+          if (letterMap[lower] !== undefined) {
+            q.correctAnswer = letterMap[lower]; // "A" → 0, "B" → 1
+          } else {
+            const parsed = parseInt(q.correctAnswer);
+            q.correctAnswer = (!isNaN(parsed) && parsed >= 0 && parsed <= 3) ? parsed : 0;
+          }
+        }
         if (typeof q.correctAnswer !== 'number' || q.correctAnswer < 0 || q.correctAnswer > 3) {
           console.warn(`Invalid correctAnswer at index ${index}, defaulting to 0`);
           q.correctAnswer = 0;
