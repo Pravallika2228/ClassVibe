@@ -640,6 +640,53 @@ const QuizPlayer = ({ sessionId, onClose }) => {
   // Leaderboard and Finished views remain the same as before...
   // (I'll skip these for brevity, but they should be included from the original file)
 
+  if (currentView === 'finished') {
+    return (
+      <div style={styles.overlay}>
+        <div style={styles.container}>
+          <h2>🏁 Quiz Finished</h2>
+
+          {/* Tabs */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+            <button onClick={() => setFinalTab('leaderboard')}>
+              Leaderboard
+            </button>
+            <button onClick={() => setFinalTab('review')}>
+              My Review
+            </button>
+          </div>
+
+          {/* Leaderboard */}
+          {finalTab === 'leaderboard' && (
+            <div>
+              {leaderboard.map((p, i) => (
+                <div key={i}>
+                  #{p.rank} - {p.score}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Review */}
+          {finalTab === 'review' && (
+            <div>
+              {myAnswers.map((a, i) => (
+                <div key={i}>
+                  <p>{a.questionText}</p>
+                  <p>{a.isCorrect ? '✅ Correct' : '❌ Wrong'}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <h3>Your Rank: {myRank}</h3>
+
+          <button onClick={onClose}>Exit</button>
+        </div>
+      </div>
+    );
+  }
+
   return null;
 };
 
