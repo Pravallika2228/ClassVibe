@@ -467,6 +467,17 @@ app.post('/api/groups/create', authenticateToken, async (req, res) => {
   }
 });
 
+// ADD THIS - Active quiz check route (fixes FloatingQuizButton 404)
+app.get('/api/quiz/group/:groupId/active', authenticateToken, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+    // Return no active session for now
+    res.json({ session: null });
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // ✅ FIX 2: JOIN GROUP ROUTE - Enhanced logging and PIN sanitization
 app.post('/api/groups/join', optionalAuth, async (req, res) => {
   try {

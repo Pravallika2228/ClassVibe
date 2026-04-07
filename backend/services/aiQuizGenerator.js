@@ -382,112 +382,74 @@ Return ONLY a valid JSON array with this EXACT structure:
    */
   validateQuestions(questions) {
     if (!Array.isArray(questions)) {
-      console.error('Invalid format - not an array:', questions);
       throw new Error('Invalid quiz format - expected array of questions');
     }
-
     if (questions.length === 0) {
       throw new Error('No questions were generated. Please try again.');
     }
 
     return questions.map((q, index) => {
-      // Ensure required fields
-      if (!q.questionText || !q.questionType) {
-        console.error(`Invalid question at index ${index}:`, q);
+      if (!q.questionText || !q.options || !Array.isArray(q.options)) {
         throw new Error(`Invalid question structure at position ${index + 1}`);
       }
 
-      const questionType = q.questionType || 'multiple_choice';
+      // Ensure 4 options
+      while (q.options.length < 4) q.options.push(`Option ${q.options.length + 1}`);
+      if (q.options.length > 4) q.options = q.options.slice(0, 4);
 
-      // Validate based on question type
-      if (questionType === 'multiple_choice') {
-        // Ensure 4 options
-        if (!Array.isArray(q.options)) q.options = [];
-        while (q.options.length < 4) {
-          q.options.push(`Option ${q.options.length + 1}`);
-        }
-        if (q.options.length > 4) {
-          q.options = q.options.slice(0, 4);
-        }
+      // Clean options prefixes like A), B), etc.
+      q.options = q.options.map(opt => {
+        if (typeof opt !== 'string') opt = String(opt);
+        return opt.replace(/^[A-D][\)\.:\-\s]+/i, '').trim();
+      });
 
-        // Clean options (remove A), B), etc. prefixes)
-        q.options = q.options.map(opt => {
-          if (typeof opt !== 'string') opt = String(opt);
-          return opt.replace(/^[A-D][\)\.:\-\s]+/i, '').trim();
-        });
+      // ✅ STRONG FIX: Handle all possible correctAnswer formats
+      let correctIndex = 0;
 
-        // Ensure correctAnswer is valid number
-        if (typeof q.correctAnswer === 'string') {
-          const letterMap = { 'a': 0, 'b': 1, 'c': 2, 'd': 3 };
-          const lower = q.correctAnswer.trim().toLowerCase();
-          if (letterMap[lower] !== undefined) {
-            q.correctAnswer = letterMap[lower]; // "A" → 0, "B" → 1
-          } else {
-            const parsed = parseInt(q.correctAnswer);
-            q.correctAnswer = (!isNaN(parsed) && parsed >= 0 && parsed <= 3) ? parsed : 0;
+      if (typeof q.correctAnswer === 'number') {
+        // Already a number
+        correctIndex = q.correctAnswer;
+
+      } else if (typeof q.correctAnswer === 'string') {
+        const val = q.correctAnswer.trim();
+
+        // Case 1: "0", "1", "2", "3"
+        if (/^[0-3]$/.test(val)) {
+          correctIndex = parseInt(val);
+
+        // Case 2: "A", "B", "C", "D"
+        } else if (/^[A-Da-d]$/.test(val)) {
+          correctIndex = val.toUpperCase().charCodeAt(0) - 65;
+
+        // Case 3: Full answer text — find matching option
+        } else {
+          const matchIndex = q.options.findIndex(opt =>
+            opt.toLowerCase().trim() === val.toLowerCase().trim() ||
+            opt.toLowerCase().includes(val.toLowerCase()) ||
+            val.toLowerCase().includes(opt.toLowerCase())
+          );
+          correctIndex = matchIndex >= 0 ? matchIndex : 0;
+          if (matchIndex < 0) {
+            console.warn(`⚠️ Could not match correctAnswer "${val}" to options, defaulting to 0`);
           }
         }
-        if (typeof q.correctAnswer !== 'number' || q.correctAnswer < 0 || q.correctAnswer > 3) {
-          console.warn(`Invalid correctAnswer at index ${index}, defaulting to 0`);
-          q.correctAnswer = 0;
-        }
-      }
-      else if (questionType === 'fill_in_blank') {
-        // Ensure correctAnswer is string (lowercase)
-        if (typeof q.correctAnswer !== 'string') {
-          q.correctAnswer = String(q.correctAnswer);
-        }
-        q.correctAnswer = q.correctAnswer.toLowerCase().trim();
-        q.options = []; // No options for fill in blank
-      }
-      else if (questionType === 'true_false') {
-        q.options = ['True', 'False'];
-        // Ensure correctAnswer is boolean
-        if (typeof q.correctAnswer !== 'boolean') {
-          q.correctAnswer = q.correctAnswer === 0 || q.correctAnswer === 'true' || q.correctAnswer === true;
-        }
-        // Convert boolean to index (true = 0, false = 1)
-        q.correctAnswer = q.correctAnswer ? 0 : 1;
-      }
-      else if (questionType === 'multiple_select') {
-        // Ensure options array
-        if (!Array.isArray(q.options)) q.options = [];
-        
-        // Ensure correctAnswer is array of indices
-        if (!Array.isArray(q.correctAnswer)) {
-          q.correctAnswer = [q.correctAnswer];
-        }
-        
-        // Ensure all indices are valid
-        q.correctAnswer = q.correctAnswer.filter(idx => 
-          typeof idx === 'number' && idx >= 0 && idx < q.options.length
-        );
-        
-        if (q.correctAnswer.length === 0) {
-          console.warn(`No valid correct answers for multiple select at index ${index}, defaulting to first option`);
-          q.correctAnswer = [0];
-        }
+
+      } else if (Array.isArray(q.correctAnswer)) {
+        // Sometimes AI returns [0, 3] — take first valid value
+        const first = q.correctAnswer.find(v => typeof v === 'number' && v >= 0 && v <= 3);
+        correctIndex = first !== undefined ? first : 0;
       }
 
-      // Set default points
-      if (!q.points || q.points < 1) {
-        // Multiple select gets more points
-        q.points = questionType === 'multiple_select' ? 15 : 10;
-      }
-
-      // Ensure explanation exists
-      if (!q.explanation || q.explanation.trim() === '') {
-        q.explanation = 'This is the correct answer based on the topic.';
-      }
+      // Clamp to valid range
+      if (correctIndex < 0 || correctIndex > 3) correctIndex = 0;
 
       return {
         questionText: q.questionText.trim(),
-        questionType,
         options: q.options,
-        correctAnswer: q.correctAnswer,
-        explanation: q.explanation.trim(),
-        points: q.points,
-        timeLimit: q.timeLimit || (questionType === 'multiple_select' ? 60 : 45),
+        correctAnswer: correctIndex,  // ✅ Always a number now
+        explanation: (q.explanation || 'This is the correct answer.').trim(),
+        points: q.points || 10,
+        timeLimit: q.timeLimit || 30,
         difficulty: q.difficulty || 'medium'
       };
     });

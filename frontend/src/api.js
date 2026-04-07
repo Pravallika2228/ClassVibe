@@ -27,6 +27,20 @@ api.interceptors.request.use(
   }
 );
 
+// Add this AFTER the request interceptor in api.js
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 403 || error.response?.status === 401) {
+      console.warn('Token expired or invalid - clearing session');
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.location.reload(); // Force re-login
+    }
+    return Promise.reject(error);
+  }
+);
+
 // ============================================
 // AUTH API CALLS
 // ============================================
