@@ -1,17 +1,19 @@
 // frontend/src/components/QuizCreator.jsx
-// Enhanced Quiz Creator - Matches Professional UI Design
+// Complete Quiz Creator with Undo/Redo, Multiple Question Types, Timer Editing
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 const QuizCreator = ({ groupId, onClose, onSuccess }) => {
   // Navigation steps
-  const [currentStep, setCurrentStep] = useState('essentials'); // essentials, questions, settings, assign
+  const [currentStep, setCurrentStep] = useState('essentials');
   
   // Step 1: Essentials
-  const [inputMethod, setInputMethod] = useState('topic'); // topic, file, paste
+  const [inputMethod, setInputMethod] = useState('topic');
   const [topic, setTopic] = useState('');
   const [pastedContent, setPastedContent] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [urlLink, setUrlLink] = useState(''); // ✅ NEW: URL input
+  const [description, setDescription] = useState(''); // ✅ NEW: Description for file/URL
   const [questionCount, setQuestionCount] = useState(10);
   const [difficulty, setDifficulty] = useState('medium');
   const [recentTopics, setRecentTopics] = useState([]);
@@ -19,6 +21,14 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
   // Step 2: Questions
   const [questions, setQuestions] = useState([]);
   const [previewIndex, setPreviewIndex] = useState(0);
+  
+  // ✅ NEW: Undo/Redo System
+  const [history, setHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+  
+  // ✅ NEW: Timer animation
+  const [previewTimer, setPreviewTimer] = useState(null);
+  const timerInterval = useRef(null);
   
   // Step 3: Settings
   const [settings, setSettings] = useState({
@@ -34,10 +44,181 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
   const [error, setError] = useState('');
   const [generatedQuizId, setGeneratedQuizId] = useState(null);
 
-  // Load recent topics on mount
+  // ========================================
+  // UNDO/REDO SYSTEM
+  // ========================================
+
+  // Save current state to history
+  const saveToHistory = (newQuestions) => {
+    const newHistory = history.slice(0, historyIndex + 1);
+    newHistory.push(JSON.parse(JSON.stringify(newQuestions)));
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
+  };
+
+  // Undo action
+  const handleUndo = () => {
+    if (historyIndex > 0) {
+      setHistoryIndex(historyIndex - 1);
+      setQuestions(JSON.parse(JSON.stringify(history[historyIndex - 1])));
+    }
+  };
+
+  // Redo action
+  const handleRedo = () => {
+    if (historyIndex < history.length - 1) {
+      setHistoryIndex(historyIndex + 1);
+      setQuestions(JSON.parse(JSON.stringify(history[historyIndex + 1])));
+    }
+  };
+
+  // Initialize history when questions are generated
   useEffect(() => {
-    fetchRecentTopics();
+    if (questions.length > 0 && history.length === 0) {
+      setHistory([JSON.parse(JSON.stringify(questions))]);
+      setHistoryIndex(0);
+    }
+  }, [questions, history.length]);
+
+  // ========================================
+  // TIMER PREVIEW ANIMATION
+  // ========================================
+
+  const startPreviewTimer = () => {
+    if (timerInterval.current) {
+      clearInterval(timerInterval.current);
+    }
+
+    const currentQ = questions[previewIndex];
+    if (!currentQ) return;
+
+    setPreviewTimer(currentQ.timeLimit || 45);
+
+    timerInterval.current = setInterval(() => {
+      setPreviewTimer(prev => {
+        if (prev <= 1) {
+          clearInterval(timerInterval.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const stopPreviewTimer = () => {
+    if (timerInterval.current) {
+      clearInterval(timerInterval.current);
+    }
+    setPreviewTimer(null);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (timerInterval.current) {
+        clearInterval(timerInterval.current);
+      }
+    };
   }, []);
+
+  // ========================================
+  // QUESTION OPERATIONS
+  // ========================================
+
+  // Add new question
+  const handleAddQuestion = () => {
+    const newQuestion = {
+      questionText: 'New question',
+      questionType: 'multiple_choice', // ✅ Default type
+      options: ['Option 1', 'Option 2', 'Option 3', 'Option 4'],
+      correctAnswer: 0,
+      explanation: 'Explanation here',
+      points: 10,
+      timeLimit: 45,
+      difficulty: 'medium'
+    };
+    const updated = [...questions, newQuestion];
+    setQuestions(updated);
+    saveToHistory(updated);
+  };
+
+  // Update question field
+  const handleUpdateQuestion = (index, field, value) => {
+    const updated = [...questions];
+    updated[index][field] = value;
+    
+    // ✅ Handle question type change
+    if (field === 'questionType') {
+      if (value === 'fill_in_blank') {
+        updated[index].options = []; // No options for fill in blank
+        updated[index].correctAnswer = ''; // String answer
+      } else if (value === 'true_false') {
+        updated[index].options = ['True', 'False'];
+        updated[index].correctAnswer = 0; // Default to True
+      } else if (value === 'multiple_select') {
+        updated[index].options = ['Option 1', 'Option 2', 'Option 3', 'Option 4'];
+        updated[index].correctAnswer = [0]; // Array of indices
+      } else {
+        // multiple_choice
+        updated[index].options = ['Option 1', 'Option 2', 'Option 3', 'Option 4'];
+        updated[index].correctAnswer = 0;
+      }
+    }
+    
+    setQuestions(updated);
+    saveToHistory(updated);
+  };
+
+  // Update option
+  const handleUpdateOption = (qIndex, oIndex, value) => {
+    const updated = [...questions];
+    updated[qIndex].options[oIndex] = value;
+    setQuestions(updated);
+    saveToHistory(updated);
+  };
+
+  // Delete question
+  const handleDeleteQuestion = (index) => {
+    if (questions.length === 1) {
+      alert('Cannot delete the last question!');
+      return;
+    }
+    const updated = questions.filter((_, i) => i !== index);
+    setQuestions(updated);
+    saveToHistory(updated);
+    
+    if (previewIndex >= updated.length) {
+      setPreviewIndex(Math.max(0, updated.length - 1));
+    }
+  };
+
+  // Set correct answer (for multiple choice and true/false)
+  const handleSetCorrectAnswer = (qIndex, oIndex) => {
+    const updated = [...questions];
+    const questionType = updated[qIndex].questionType;
+    
+    if (questionType === 'multiple_select') {
+      // Toggle selection for multiple select
+      const currentAnswers = Array.isArray(updated[qIndex].correctAnswer) 
+        ? [...updated[qIndex].correctAnswer] 
+        : [];
+      
+      if (currentAnswers.includes(oIndex)) {
+        updated[qIndex].correctAnswer = currentAnswers.filter(i => i !== oIndex);
+      } else {
+        updated[qIndex].correctAnswer = [...currentAnswers, oIndex];
+      }
+    } else {
+      // Single selection for multiple choice and true/false
+      updated[qIndex].correctAnswer = oIndex;
+    }
+    
+    setQuestions(updated);
+    saveToHistory(updated);
+  };
+
+  // ========================================
+  // API OPERATIONS
+  // ========================================
 
   const fetchRecentTopics = async () => {
     try {
@@ -58,6 +239,10 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
     }
   };
 
+  useEffect(() => {
+    fetchRecentTopics();
+  }, []);
+
   // Generate quiz
   const handleGenerate = async () => {
     setLoading(true);
@@ -73,6 +258,9 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
         formData.append('questionCount', questionCount);
         formData.append('groupId', groupId);
         formData.append('difficulty', difficulty);
+        if (description.trim()) {
+          formData.append('description', description.trim()); // ✅ Include description
+        }
 
         const response = await fetch(
           `${process.env.REACT_APP_API_URL || 'https://classvibe-backend.onrender.com'}/api/quiz/generate-from-file`,
@@ -92,12 +280,48 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
         } else {
           setError(data.error || 'Failed to generate quiz');
         }
+      } else if (inputMethod === 'url' && urlLink.trim()) {
+        // ✅ NEW: Generate from URL (YouTube/Website)
+        if (!description.trim()) {
+          setError('Please provide a description to guide the AI');
+          setLoading(false);
+          return;
+        }
+
+        const response = await fetch(
+          `${process.env.REACT_APP_API_URL || 'https://classvibe-backend.onrender.com'}/api/quiz/generate-from-url`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              url: urlLink.trim(),
+              description: description.trim(),
+              questionCount,
+              groupId,
+              difficulty
+            })
+          }
+        );
+
+        const data = await response.json();
+
+        if (response.ok) {
+          setQuestions(data.quiz.questions);
+          setGeneratedQuizId(data.quiz._id);
+          setCurrentStep('questions');
+        } else {
+          setError(data.error || 'Failed to generate quiz from URL. This feature may not be fully implemented yet.');
+        }
       } else {
         // Generate from topic or pasted content
         const contentToUse = inputMethod === 'paste' ? pastedContent : topic;
         
         if (!contentToUse.trim()) {
           setError('Please enter a topic or paste content');
+          setLoading(false);
           return;
         }
 
@@ -136,7 +360,7 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
     }
   };
 
-  // Update quiz
+  // Save quiz
   const handleSaveChanges = async () => {
     if (!generatedQuizId) return;
 
@@ -176,51 +400,259 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
     }
   };
 
-  // Add new question
-  const handleAddQuestion = () => {
-    const newQuestion = {
-      questionText: 'New question',
-      options: ['Option 1', 'Option 2', 'Option 3', 'Option 4'],
-      correctAnswer: 0,
-      explanation: 'Explanation here',
-      points: 10,
-      timeLimit: 45,
-      difficulty: 'medium'
+  // ========================================
+  // RENDER HELPERS
+  // ========================================
+
+  const getQuestionTypeLabel = (type) => {
+    const labels = {
+      'multiple_choice': 'Multiple Choice',
+      'fill_in_blank': 'Fill in Blank',
+      'true_false': 'True/False',
+      'multiple_select': 'Multiple Select'
     };
-    setQuestions([...questions, newQuestion]);
+    return labels[type] || 'Multiple Choice';
   };
 
-  // Update question
-  const handleUpdateQuestion = (index, field, value) => {
-    const updated = [...questions];
-    updated[index][field] = value;
-    setQuestions(updated);
+  const renderQuestionEditor = (q, qIndex) => {
+    const questionType = q.questionType || 'multiple_choice';
+
+    return (
+      <div key={qIndex} style={styles.questionCard}>
+        <div style={styles.questionCardHeader}>
+          <div style={styles.questionTypeRow}>
+            <span style={styles.questionNumber}>{qIndex + 1}</span>
+            
+            {/* ✅ Question Type Selector */}
+            <select
+              value={questionType}
+              onChange={(e) => handleUpdateQuestion(qIndex, 'questionType', e.target.value)}
+              style={styles.questionTypeSelect}
+            >
+              <option value="multiple_choice">Multiple Choice</option>
+              <option value="fill_in_blank">Fill in Blank</option>
+              <option value="true_false">True/False</option>
+              <option value="multiple_select">Multiple Select</option>
+            </select>
+
+            {/* ✅ Timer Editor */}
+            <div style={styles.timerEditor}>
+              <span>⏱️</span>
+              <input
+                type="number"
+                value={q.timeLimit || 45}
+                onChange={(e) => handleUpdateQuestion(qIndex, 'timeLimit', parseInt(e.target.value))}
+                style={styles.timerInput}
+                min="10"
+                max="300"
+              />
+              <span style={styles.timerUnit}>s</span>
+            </div>
+          </div>
+          
+          <button 
+            onClick={() => handleDeleteQuestion(qIndex)}
+            style={styles.deleteBtn}
+            title="Delete Question"
+          >
+            🗑️
+          </button>
+        </div>
+
+        <input
+          type="text"
+          value={q.questionText}
+          onChange={(e) => handleUpdateQuestion(qIndex, 'questionText', e.target.value)}
+          style={styles.questionInput}
+          placeholder="Enter question text..."
+        />
+
+        {/* ✅ Conditional Options Rendering */}
+        {questionType === 'fill_in_blank' ? (
+          <div style={styles.fillInBlankEditor}>
+            <label style={styles.answerLabel}>Correct Answer:</label>
+            <input
+              type="text"
+              value={q.correctAnswer || ''}
+              onChange={(e) => handleUpdateQuestion(qIndex, 'correctAnswer', e.target.value)}
+              placeholder="Type the correct answer (case-insensitive)"
+              style={styles.fillInBlankInput}
+            />
+            <div style={styles.fillInBlankHint}>
+              💡 Students will type their answer. Matching is case-insensitive.
+            </div>
+          </div>
+        ) : (
+          <div style={styles.optionsList}>
+            {questionType === 'multiple_select' && (
+              <div style={styles.multiSelectHint}>
+                ℹ️ Check all correct answers (students can select multiple)
+              </div>
+            )}
+            {q.options.map((opt, oIndex) => {
+              const isCorrect = questionType === 'multiple_select'
+                ? (Array.isArray(q.correctAnswer) && q.correctAnswer.includes(oIndex))
+                : (q.correctAnswer === oIndex);
+
+              return (
+                <div key={oIndex} style={styles.optionRow}>
+                  <input
+                    type={questionType === 'multiple_select' ? 'checkbox' : 'radio'}
+                    checked={isCorrect}
+                    onChange={() => handleSetCorrectAnswer(qIndex, oIndex)}
+                    style={styles.optionCheckbox}
+                    name={`question-${qIndex}`}
+                  />
+                  <input
+                    type="text"
+                    value={opt}
+                    onChange={(e) => handleUpdateOption(qIndex, oIndex, e.target.value)}
+                    style={{
+                      ...styles.optionInput,
+                      backgroundColor: isCorrect ? '#E8F5E9' : '#fff',
+                      fontWeight: isCorrect ? '600' : '400'
+                    }}
+                  />
+                  {isCorrect && (
+                    <span style={styles.correctBadge}>✓</span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <button 
+          onClick={() => setPreviewIndex(qIndex)} 
+          style={styles.previewThisBtn}
+        >
+          👁️ Preview
+        </button>
+      </div>
+    );
   };
 
-  // Update option
-  const handleUpdateOption = (qIndex, oIndex, value) => {
-    const updated = [...questions];
-    updated[qIndex].options[oIndex] = value;
-    setQuestions(updated);
-  };
+  const renderLivePreview = () => {
+    const currentQ = questions[previewIndex];
+    if (!currentQ) return null;
 
-  // Delete question
-  const handleDeleteQuestion = (index) => {
-    if (questions.length === 1) {
-      alert('Cannot delete the last question!');
-      return;
-    }
-    setQuestions(questions.filter((_, i) => i !== index));
-    if (previewIndex >= questions.length - 1) {
-      setPreviewIndex(Math.max(0, previewIndex - 1));
-    }
-  };
+    const questionType = currentQ.questionType || 'multiple_choice';
+    const timeLimit = currentQ.timeLimit || 45;
+    const isTimerRunning = previewTimer !== null;
+    const timeRemainingDisplay = isTimerRunning ? previewTimer : timeLimit;
 
-  // Set correct answer
-  const handleSetCorrectAnswer = (qIndex, oIndex) => {
-    const updated = [...questions];
-    updated[qIndex].correctAnswer = oIndex;
-    setQuestions(updated);
+    return (
+      <div style={styles.livePreview}>
+        <div style={styles.previewHeader}>LIVE PREVIEW</div>
+        <div style={styles.previewSubtitle}>Student View Experience</div>
+
+        <div style={styles.phoneFrame}>
+          <div style={styles.phoneNotch}></div>
+          
+          <div style={styles.phoneContent}>
+            {/* Question Number & Timer */}
+            <div style={styles.previewTopBar}>
+              <div style={styles.previewQuestionNumber}>
+                QUESTION {previewIndex + 1} OF {questions.length}
+              </div>
+              <div style={{
+                ...styles.previewTimer,
+                backgroundColor: timeRemainingDisplay <= 10 ? '#dc3545' : '#ff9800',
+                animation: isTimerRunning && timeRemainingDisplay <= 10 ? 'pulse 1s infinite' : 'none'
+              }}>
+                ⏱️ {timeRemainingDisplay}s
+              </div>
+            </div>
+
+            {/* Question Type Badge */}
+            <div style={styles.previewTypeBadge}>
+              {getQuestionTypeLabel(questionType)}
+            </div>
+
+            {/* Question Text */}
+            <div style={styles.previewQuestionText}>
+              {currentQ.questionText}
+            </div>
+
+            {/* Render Preview Based on Question Type */}
+            {questionType === 'fill_in_blank' ? (
+              <div style={styles.previewFillInBlank}>
+                <input
+                  type="text"
+                  placeholder="Type your answer here..."
+                  style={styles.previewFillInput}
+                  disabled
+                />
+              </div>
+            ) : (
+              <div style={styles.previewOptions}>
+                {questionType === 'multiple_select' && (
+                  <div style={styles.previewMultiSelectHint}>
+                    ℹ️ Select all correct answers
+                  </div>
+                )}
+                {currentQ.options.map((opt, i) => (
+                  <div key={i} style={styles.previewOption}>
+                    {questionType === 'multiple_select' ? (
+                      <div style={styles.previewCheckbox}></div>
+                    ) : (
+                      <span style={styles.previewOptionLabel}>
+                        {String.fromCharCode(65 + i)}
+                      </span>
+                    )}
+                    <span style={styles.previewOptionText}>{opt}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button style={styles.previewNextBtn}>
+              {questionType === 'fill_in_blank' ? 'Submit Answer' : 'Next Question'}
+            </button>
+          </div>
+        </div>
+
+        {/* Timer Controls */}
+        <div style={styles.timerControls}>
+          {!isTimerRunning ? (
+            <button onClick={startPreviewTimer} style={styles.timerControlBtn}>
+              ▶️ Start Timer
+            </button>
+          ) : (
+            <button onClick={stopPreviewTimer} style={styles.timerControlBtn}>
+              ⏸️ Stop Timer
+            </button>
+          )}
+        </div>
+
+        {/* Preview Navigation */}
+        <div style={styles.previewNavigation}>
+          <button 
+            onClick={() => {
+              stopPreviewTimer();
+              setPreviewIndex(Math.max(0, previewIndex - 1));
+            }}
+            disabled={previewIndex === 0}
+            style={styles.navBtn}
+          >
+            ← Previous
+          </button>
+          <span style={styles.navIndicator}>
+            {previewIndex + 1} / {questions.length}
+          </span>
+          <button 
+            onClick={() => {
+              stopPreviewTimer();
+              setPreviewIndex(Math.min(questions.length - 1, previewIndex + 1));
+            }}
+            disabled={previewIndex === questions.length - 1}
+            style={styles.navBtn}
+          >
+            Next →
+          </button>
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -270,12 +702,11 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
         <div style={styles.content}>
           {error && <div style={styles.error}>{error}</div>}
 
-          {/* STEP 1: ESSENTIALS */}
+          {/* STEP 1: ESSENTIALS - Keep existing code */}
           {currentStep === 'essentials' && (
             <div style={styles.essentialsContainer}>
               <h3 style={styles.sectionTitle}>Create Your Quiz</h3>
               
-              {/* Input Method Selection */}
               <div style={styles.inputMethodGroup}>
                 <button
                   style={{...styles.inputMethodBtn, ...(inputMethod === 'topic' ? styles.inputMethodBtnActive : {})}}
@@ -290,6 +721,12 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
                   📤 Upload File
                 </button>
                 <button
+                  style={{...styles.inputMethodBtn, ...(inputMethod === 'url' ? styles.inputMethodBtnActive : {})}}
+                  onClick={() => setInputMethod('url')}
+                >
+                  🔗 YouTube/Website
+                </button>
+                <button
                   style={{...styles.inputMethodBtn, ...(inputMethod === 'paste' ? styles.inputMethodBtnActive : {})}}
                   onClick={() => setInputMethod('paste')}
                 >
@@ -297,7 +734,6 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
                 </button>
               </div>
 
-              {/* Topic Input */}
               {inputMethod === 'topic' && (
                 <>
                   <div style={styles.formGroup}>
@@ -312,7 +748,6 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
                     />
                   </div>
 
-                  {/* Recent Topics Suggestions */}
                   {recentTopics.length > 0 && (
                     <div style={styles.suggestionsBox}>
                       <div style={styles.suggestionsTitle}>💡 Suggested Topics:</div>
@@ -332,33 +767,91 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
                 </>
               )}
 
-              {/* File Upload */}
               {inputMethod === 'file' && (
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>Upload Document *</label>
-                  <div style={styles.fileUpload}>
-                    <input
-                      type="file"
-                      accept=".pdf,.docx,.doc,.txt"
-                      onChange={(e) => setSelectedFile(e.target.files[0])}
-                      style={styles.fileInput}
-                      id="quiz-file-upload"
-                    />
-                    <label htmlFor="quiz-file-upload" style={styles.fileLabel}>
-                      {selectedFile ? (
-                        <span>📄 {selectedFile.name}</span>
-                      ) : (
-                        <span>📤 Choose PDF, DOCX, or TXT file</span>
-                      )}
+                <>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Upload Document *</label>
+                    <div style={styles.fileUpload}>
+                      <input
+                        type="file"
+                        accept=".pdf,.docx,.doc,.txt"
+                        onChange={(e) => setSelectedFile(e.target.files[0])}
+                        style={styles.fileInput}
+                        id="quiz-file-upload"
+                      />
+                      <label htmlFor="quiz-file-upload" style={styles.fileLabel}>
+                        {selectedFile ? (
+                          <span>📄 {selectedFile.name}</span>
+                        ) : (
+                          <span>📤 Choose PDF, DOCX, or TXT file</span>
+                        )}
+                      </label>
+                    </div>
+                    <div style={styles.fileHint}>
+                      AI will analyze the document and generate questions based on the content
+                    </div>
+                  </div>
+
+                  {/* ✅ NEW: Description for file */}
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>
+                      Description (Optional)
+                      <span style={styles.labelHint}> - Guide the AI on what to focus on</span>
                     </label>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="e.g., Focus on chapters 3-5, emphasize practical applications, create questions about key formulas..."
+                      style={styles.textarea}
+                      rows={3}
+                    />
+                    <div style={styles.fileHint}>
+                      💡 This helps AI understand which parts to focus on or what type of questions to generate
+                    </div>
                   </div>
-                  <div style={styles.fileHint}>
-                    AI will analyze the document and generate questions based on the content
-                  </div>
-                </div>
+                </>
               )}
 
-              {/* Paste Content */}
+              {/* ✅ NEW: URL Input (YouTube/Website) */}
+              {inputMethod === 'url' && (
+                <>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>YouTube or Website URL *</label>
+                    <input
+                      type="url"
+                      value={urlLink}
+                      onChange={(e) => setUrlLink(e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=... or https://example.com/article"
+                      style={styles.input}
+                      autoFocus
+                    />
+                    <div style={styles.urlHint}>
+                      <div style={styles.urlHintTitle}>✅ Supported:</div>
+                      <div>• YouTube videos (will extract transcript)</div>
+                      <div>• Educational websites and articles</div>
+                      <div>• Documentation pages</div>
+                    </div>
+                  </div>
+
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>
+                      Description *
+                      <span style={styles.labelHint}> - What should the quiz focus on?</span>
+                    </label>
+                    <textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="e.g., Create questions about the main concepts explained in the video, focus on the tutorial steps, emphasize the key takeaways..."
+                      style={styles.textarea}
+                      rows={4}
+                    />
+                    <div style={styles.fileHint}>
+                      💡 Describe what aspects of the content you want the quiz to cover
+                    </div>
+                  </div>
+                </>
+              )}
+
               {inputMethod === 'paste' && (
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Paste Your Content *</label>
@@ -372,7 +865,6 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
                 </div>
               )}
 
-              {/* Quiz Options */}
               <div style={styles.optionsRow}>
                 <div style={styles.formGroup}>
                   <label style={styles.label}>Number of Questions</label>
@@ -397,7 +889,13 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
 
               <button
                 onClick={handleGenerate}
-                disabled={loading || (inputMethod === 'topic' && !topic.trim()) || (inputMethod === 'file' && !selectedFile) || (inputMethod === 'paste' && !pastedContent.trim())}
+                disabled={
+                  loading || 
+                  (inputMethod === 'topic' && !topic.trim()) || 
+                  (inputMethod === 'file' && !selectedFile) || 
+                  (inputMethod === 'url' && (!urlLink.trim() || !description.trim())) ||
+                  (inputMethod === 'paste' && !pastedContent.trim())
+                }
                 style={styles.generateBtn}
               >
                 {loading ? '🤖 Generating Quiz...' : '🚀 Generate Quiz with AI'}
@@ -405,135 +903,59 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
             </div>
           )}
 
-          {/* STEP 2: QUESTIONS (EXACT UI MATCH) */}
+          {/* STEP 2: QUESTIONS */}
           {currentStep === 'questions' && (
             <div style={styles.questionsContainer}>
               {/* Left Panel: Question Bank */}
               <div style={styles.questionBank}>
                 <div style={styles.questionBankHeader}>
                   <h3 style={styles.questionBankTitle}>Question Bank</h3>
-                  <button onClick={handleAddQuestion} style={styles.addQuestionBtn}>
-                    + Add Question
-                  </button>
+                  <div style={styles.headerActions}>
+                    {/* ✅ Undo/Redo Buttons */}
+                    <button 
+                      onClick={handleUndo}
+                      disabled={historyIndex <= 0}
+                      style={{
+                        ...styles.undoRedoBtn,
+                        opacity: historyIndex <= 0 ? 0.4 : 1,
+                        cursor: historyIndex <= 0 ? 'not-allowed' : 'pointer'
+                      }}
+                      title="Undo"
+                    >
+                      ↶
+                    </button>
+                    <button 
+                      onClick={handleRedo}
+                      disabled={historyIndex >= history.length - 1}
+                      style={{
+                        ...styles.undoRedoBtn,
+                        opacity: historyIndex >= history.length - 1 ? 0.4 : 1,
+                        cursor: historyIndex >= history.length - 1 ? 'not-allowed' : 'pointer'
+                      }}
+                      title="Redo"
+                    >
+                      ↷
+                    </button>
+                    <button onClick={handleAddQuestion} style={styles.addQuestionBtn}>
+                      + Add Question
+                    </button>
+                  </div>
                 </div>
                 <div style={styles.questionBankSubtitle}>
                   {questions.length} question{questions.length !== 1 ? 's' : ''} added so far
                 </div>
 
                 <div style={styles.questionsList}>
-                  {questions.map((q, qIndex) => (
-                    <div key={qIndex} style={styles.questionCard}>
-                      <div style={styles.questionCardHeader}>
-                        <div style={styles.questionTypeRow}>
-                          <span style={styles.questionNumber}>{qIndex + 1}</span>
-                          <span style={styles.questionType}>Multiple Choice</span>
-                          <span style={styles.questionTime}>⏱️ ~{q.timeLimit}s</span>
-                        </div>
-                        <button 
-                          onClick={() => handleDeleteQuestion(qIndex)}
-                          style={styles.deleteBtn}
-                        >
-                          🗑️
-                        </button>
-                      </div>
-
-                      <input
-                        type="text"
-                        value={q.questionText}
-                        onChange={(e) => handleUpdateQuestion(qIndex, 'questionText', e.target.value)}
-                        style={styles.questionInput}
-                        placeholder="Enter question text..."
-                      />
-
-                      <div style={styles.optionsList}>
-                        {q.options.map((opt, oIndex) => (
-                          <div key={oIndex} style={styles.optionRow}>
-                            <input
-                              type="checkbox"
-                              checked={q.correctAnswer === oIndex}
-                              onChange={() => handleSetCorrectAnswer(qIndex, oIndex)}
-                              style={styles.optionCheckbox}
-                            />
-                            <input
-                              type="text"
-                              value={opt}
-                              onChange={(e) => handleUpdateOption(qIndex, oIndex, e.target.value)}
-                              style={{
-                                ...styles.optionInput,
-                                backgroundColor: q.correctAnswer === oIndex ? '#E8F5E9' : '#fff'
-                              }}
-                            />
-                          </div>
-                        ))}
-                      </div>
-
-                      <button onClick={() => setPreviewIndex(qIndex)} style={styles.previewThisBtn}>
-                        👁️ Preview
-                      </button>
-                    </div>
-                  ))}
+                  {questions.map((q, qIndex) => renderQuestionEditor(q, qIndex))}
                 </div>
               </div>
 
               {/* Right Panel: Live Preview */}
-              <div style={styles.livePreview}>
-                <div style={styles.previewHeader}>LIVE PREVIEW</div>
-                <div style={styles.previewSubtitle}>Student View Experience</div>
-
-                <div style={styles.phoneFrame}>
-                  <div style={styles.phoneNotch}></div>
-                  
-                  <div style={styles.phoneContent}>
-                    {questions[previewIndex] && (
-                      <>
-                        <div style={styles.previewQuestionNumber}>
-                          QUESTION {previewIndex + 1} OF {questions.length}
-                        </div>
-                        <div style={styles.previewQuestionText}>
-                          {questions[previewIndex].questionText}
-                        </div>
-
-                        <div style={styles.previewOptions}>
-                          {questions[previewIndex].options.map((opt, i) => (
-                            <div key={i} style={styles.previewOption}>
-                              <span style={styles.previewOptionLabel}>
-                                {String.fromCharCode(65 + i)}
-                              </span>
-                              <span style={styles.previewOptionText}>{opt}</span>
-                            </div>
-                          ))}
-                        </div>
-
-                        <button style={styles.previewNextBtn}>Next Question</button>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div style={styles.previewNavigation}>
-                  <button 
-                    onClick={() => setPreviewIndex(Math.max(0, previewIndex - 1))}
-                    disabled={previewIndex === 0}
-                    style={styles.navBtn}
-                  >
-                    ← Previous
-                  </button>
-                  <span style={styles.navIndicator}>
-                    {previewIndex + 1} / {questions.length}
-                  </span>
-                  <button 
-                    onClick={() => setPreviewIndex(Math.min(questions.length - 1, previewIndex + 1))}
-                    disabled={previewIndex === questions.length - 1}
-                    style={styles.navBtn}
-                  >
-                    Next →
-                  </button>
-                </div>
-              </div>
+              {renderLivePreview()}
             </div>
           )}
 
-          {/* STEP 3: SETTINGS */}
+          {/* STEP 3: SETTINGS - Keep existing code */}
           {currentStep === 'settings' && (
             <div style={styles.settingsContainer}>
               <h3 style={styles.sectionTitle}>Quiz Settings</h3>
@@ -602,7 +1024,7 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
 };
 
 // ========================================
-// STYLES (MATCHING PROFESSIONAL UI DESIGN)
+// STYLES
 // ========================================
 
 const styles = {
@@ -648,8 +1070,7 @@ const styles = {
     cursor: 'pointer',
     color: '#666',
     padding: '4px 12px',
-    borderRadius: '8px',
-    transition: 'all 0.2s'
+    borderRadius: '8px'
   },
   tabs: {
     display: 'flex',
@@ -696,7 +1117,7 @@ const styles = {
     border: '1px solid #FCA5A5'
   },
 
-  // Essentials styles
+  // Essentials - Keep existing styles
   essentialsContainer: {
     maxWidth: '800px',
     margin: '0 auto'
@@ -709,7 +1130,7 @@ const styles = {
   },
   inputMethodGroup: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
+    gridTemplateColumns: 'repeat(4, 1fr)', // ✅ Changed from 3 to 4
     gap: '12px',
     marginBottom: '32px'
   },
@@ -739,6 +1160,12 @@ const styles = {
     fontWeight: '600',
     color: '#374151'
   },
+  labelHint: {
+    fontSize: '12px',
+    fontWeight: '400',
+    color: '#6b7280',
+    marginLeft: '4px'
+  },
   input: {
     width: '100%',
     padding: '14px 16px',
@@ -746,7 +1173,6 @@ const styles = {
     border: '2px solid #e0e0e0',
     borderRadius: '10px',
     outline: 'none',
-    transition: 'all 0.2s',
     fontFamily: 'inherit'
   },
   select: {
@@ -787,7 +1213,6 @@ const styles = {
     textAlign: 'center',
     cursor: 'pointer',
     backgroundColor: '#fff',
-    transition: 'all 0.2s',
     fontSize: '15px',
     fontWeight: '500',
     color: '#4b5563'
@@ -797,6 +1222,20 @@ const styles = {
     fontSize: '13px',
     color: '#6b7280',
     fontStyle: 'italic'
+  },
+  urlHint: {
+    marginTop: '12px',
+    padding: '12px',
+    backgroundColor: '#EEF2FF',
+    borderRadius: '8px',
+    fontSize: '13px',
+    color: '#4b5563',
+    border: '1px solid #C7D2FE'
+  },
+  urlHintTitle: {
+    fontWeight: '600',
+    marginBottom: '8px',
+    color: '#4F46E5'
   },
   suggestionsBox: {
     padding: '20px',
@@ -824,7 +1263,6 @@ const styles = {
     fontSize: '13px',
     fontWeight: '500',
     cursor: 'pointer',
-    transition: 'all 0.2s',
     color: '#92400E'
   },
   optionsRow: {
@@ -843,11 +1281,10 @@ const styles = {
     border: 'none',
     borderRadius: '12px',
     cursor: 'pointer',
-    transition: 'all 0.2s',
     boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)'
   },
 
-  // Questions (Main UI) styles
+  // Questions Panel
   questionsContainer: {
     display: 'grid',
     gridTemplateColumns: '1.5fr 1fr',
@@ -870,6 +1307,26 @@ const styles = {
     color: '#1a1a1a',
     margin: 0
   },
+  headerActions: {
+    display: 'flex',
+    gap: '8px',
+    alignItems: 'center'
+  },
+  // ✅ Undo/Redo Buttons
+  undoRedoBtn: {
+    width: '40px',
+    height: '40px',
+    border: '2px solid #e0e0e0',
+    borderRadius: '8px',
+    background: '#fff',
+    fontSize: '20px',
+    fontWeight: '700',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s'
+  },
   addQuestionBtn: {
     padding: '10px 20px',
     border: '2px solid #4F46E5',
@@ -878,8 +1335,7 @@ const styles = {
     color: '#4F46E5',
     fontSize: '14px',
     fontWeight: '600',
-    cursor: 'pointer',
-    transition: 'all 0.2s'
+    cursor: 'pointer'
   },
   questionBankSubtitle: {
     fontSize: '13px',
@@ -898,8 +1354,7 @@ const styles = {
     backgroundColor: '#fff',
     border: '2px solid #e5e7eb',
     borderRadius: '12px',
-    padding: '20px',
-    transition: 'all 0.2s'
+    padding: '20px'
   },
   questionCardHeader: {
     display: 'flex',
@@ -920,14 +1375,41 @@ const styles = {
     fontSize: '12px',
     fontWeight: '700'
   },
-  questionType: {
+  // ✅ Question Type Dropdown
+  questionTypeSelect: {
+    padding: '6px 12px',
+    fontSize: '12px',
+    fontWeight: '600',
+    border: '1px solid #e0e0e0',
+    borderRadius: '6px',
+    backgroundColor: '#fff',
+    color: '#4b5563',
+    cursor: 'pointer',
+    outline: 'none'
+  },
+  // ✅ Timer Editor
+  timerEditor: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '6px 10px',
+    border: '1px solid #e0e0e0',
+    borderRadius: '6px',
+    backgroundColor: '#fff'
+  },
+  timerInput: {
+    width: '50px',
+    padding: '4px',
+    fontSize: '13px',
+    fontWeight: '600',
+    border: 'none',
+    outline: 'none',
+    textAlign: 'center'
+  },
+  timerUnit: {
     fontSize: '12px',
     color: '#6b7280',
     fontWeight: '600'
-  },
-  questionTime: {
-    fontSize: '12px',
-    color: '#9ca3af'
   },
   deleteBtn: {
     background: 'none',
@@ -935,8 +1417,7 @@ const styles = {
     fontSize: '18px',
     cursor: 'pointer',
     padding: '4px 8px',
-    borderRadius: '6px',
-    transition: 'all 0.2s'
+    borderRadius: '6px'
   },
   questionInput: {
     width: '100%',
@@ -948,6 +1429,41 @@ const styles = {
     fontWeight: '500',
     outline: 'none'
   },
+  // ✅ Fill in Blank Editor
+  fillInBlankEditor: {
+    marginBottom: '16px'
+  },
+  answerLabel: {
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: '8px',
+    display: 'block'
+  },
+  fillInBlankInput: {
+    width: '100%',
+    padding: '12px',
+    fontSize: '15px',
+    border: '2px solid #4F46E5',
+    borderRadius: '8px',
+    outline: 'none',
+    backgroundColor: '#EEF2FF'
+  },
+  fillInBlankHint: {
+    marginTop: '8px',
+    fontSize: '12px',
+    color: '#6b7280',
+    fontStyle: 'italic'
+  },
+  multiSelectHint: {
+    fontSize: '13px',
+    fontWeight: '600',
+    color: '#4F46E5',
+    marginBottom: '12px',
+    padding: '8px 12px',
+    backgroundColor: '#EEF2FF',
+    borderRadius: '6px'
+  },
   optionsList: {
     display: 'flex',
     flexDirection: 'column',
@@ -957,7 +1473,8 @@ const styles = {
   optionRow: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px'
+    gap: '10px',
+    position: 'relative'
   },
   optionCheckbox: {
     width: '18px',
@@ -973,6 +1490,12 @@ const styles = {
     borderRadius: '8px',
     outline: 'none'
   },
+  correctBadge: {
+    position: 'absolute',
+    right: '12px',
+    fontSize: '16px',
+    color: '#10B981'
+  },
   previewThisBtn: {
     padding: '8px 16px',
     border: '1px solid #e5e7eb',
@@ -981,11 +1504,10 @@ const styles = {
     fontSize: '13px',
     fontWeight: '600',
     color: '#4b5563',
-    cursor: 'pointer',
-    transition: 'all 0.2s'
+    cursor: 'pointer'
   },
 
-  // Live Preview styles
+  // Live Preview
   livePreview: {
     display: 'flex',
     flexDirection: 'column',
@@ -1029,11 +1551,37 @@ const styles = {
     height: '100%',
     overflowY: 'auto'
   },
+  previewTopBar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '16px'
+  },
   previewQuestionNumber: {
     fontSize: '11px',
     fontWeight: '700',
     color: '#4F46E5',
-    letterSpacing: '0.5px',
+    letterSpacing: '0.5px'
+  },
+  // ✅ Animated Timer
+  previewTimer: {
+    padding: '6px 12px',
+    borderRadius: '16px',
+    fontSize: '13px',
+    fontWeight: '700',
+    color: 'white',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px'
+  },
+  previewTypeBadge: {
+    display: 'inline-block',
+    padding: '4px 10px',
+    fontSize: '11px',
+    fontWeight: '600',
+    backgroundColor: '#f3f4f6',
+    color: '#6b7280',
+    borderRadius: '12px',
     marginBottom: '12px'
   },
   previewQuestionText: {
@@ -1042,6 +1590,28 @@ const styles = {
     color: '#1a1a1a',
     marginBottom: '24px',
     lineHeight: '1.5'
+  },
+  // ✅ Fill in Blank Preview
+  previewFillInBlank: {
+    marginBottom: '24px'
+  },
+  previewFillInput: {
+    width: '100%',
+    padding: '14px',
+    fontSize: '15px',
+    border: '2px solid #e0e0e0',
+    borderRadius: '10px',
+    outline: 'none'
+  },
+  previewMultiSelectHint: {
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#4F46E5',
+    marginBottom: '12px',
+    padding: '8px',
+    backgroundColor: '#EEF2FF',
+    borderRadius: '6px',
+    textAlign: 'center'
   },
   previewOptions: {
     display: 'flex',
@@ -1056,8 +1626,14 @@ const styles = {
     padding: '14px',
     border: '2px solid #e5e7eb',
     borderRadius: '10px',
-    backgroundColor: '#fff',
-    transition: 'all 0.2s'
+    backgroundColor: '#fff'
+  },
+  previewCheckbox: {
+    width: '20px',
+    height: '20px',
+    border: '2px solid #9ca3af',
+    borderRadius: '4px',
+    flexShrink: 0
   },
   previewOptionLabel: {
     width: '28px',
@@ -1088,6 +1664,21 @@ const styles = {
     fontWeight: '700',
     cursor: 'pointer'
   },
+  // ✅ Timer Controls
+  timerControls: {
+    marginTop: '16px',
+    marginBottom: '12px'
+  },
+  timerControlBtn: {
+    padding: '10px 24px',
+    border: '2px solid #4F46E5',
+    borderRadius: '8px',
+    background: '#fff',
+    color: '#4F46E5',
+    fontSize: '14px',
+    fontWeight: '600',
+    cursor: 'pointer'
+  },
   previewNavigation: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -1104,8 +1695,7 @@ const styles = {
     fontSize: '14px',
     fontWeight: '600',
     color: '#4b5563',
-    cursor: 'pointer',
-    transition: 'all 0.2s'
+    cursor: 'pointer'
   },
   navIndicator: {
     fontSize: '14px',
@@ -1113,7 +1703,7 @@ const styles = {
     color: '#6b7280'
   },
 
-  // Settings styles
+  // Settings
   settingsContainer: {
     maxWidth: '800px',
     margin: '0 auto'
@@ -1146,7 +1736,7 @@ const styles = {
     accentColor: '#4F46E5'
   },
 
-  // Footer styles
+  // Footer
   footer: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -1212,5 +1802,20 @@ const styles = {
     boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
   }
 };
+
+// Add CSS animations
+const styleSheet = document.styleSheets[0];
+if (styleSheet) {
+  try {
+    styleSheet.insertRule(`
+      @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.7; }
+      }
+    `, styleSheet.cssRules.length);
+  } catch (e) {
+    console.log('Animation already defined');
+  }
+}
 
 export default QuizCreator;
