@@ -1,6 +1,4 @@
 // backend/models/Message.js
-// Message model with Quiz Notification Support
-
 const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema({
@@ -12,11 +10,12 @@ const messageSchema = new mongoose.Schema({
     index: true
   },
   
-  // Sender (optional for system messages)
+  // Sender
   sender: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    default: null
+    required: true,
+    index: true
   },
   
   // Message content
@@ -25,17 +24,11 @@ const messageSchema = new mongoose.Schema({
     maxlength: 5000
   },
   
-  // ✅ UPDATED: Message type with quiz notifications
+  // Message type
   messageType: {
     type: String,
-    enum: ['text', 'system', 'private', 'file', 'poll', 'quiz_started', 'quiz_ended'],
+    enum: ['text', 'system', 'private', 'file'],
     default: 'text'
-  },
-  
-  // ✅ NEW: Metadata for special message types (quiz info, poll data)
-  metadata: {
-    type: mongoose.Schema.Types.Mixed,
-    default: null
   },
   
   // For private messages
@@ -45,7 +38,7 @@ const messageSchema = new mongoose.Schema({
     default: null
   },
   
-  // File attachment fields
+  // ✅ NEW: File attachment fields
   fileUrl: {
     type: String,
     default: null
@@ -65,15 +58,6 @@ const messageSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-  
-  // Poll fields
-  pollOptions: [{
-    text: String,
-    votes: [{
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    }]
-  }],
   
   // Editing
   isEdited: {
@@ -127,7 +111,6 @@ messageSchema.index({ group: 1, createdAt: -1 });
 messageSchema.index({ sender: 1 });
 messageSchema.index({ recipient: 1 });
 messageSchema.index({ isDeleted: 1 });
-messageSchema.index({ messageType: 1 });
 
 // ============================================
 // METHODS
@@ -167,53 +150,12 @@ messageSchema.methods.deleteMessage = async function() {
 
 // Check if user can edit this message
 messageSchema.methods.canEdit = function(userId) {
-  return this.sender && this.sender.toString() === userId.toString() && !this.isDeleted;
+  return this.sender.toString() === userId.toString() && !this.isDeleted;
 };
 
 // Check if user can delete this message
 messageSchema.methods.canDelete = function(userId) {
-  return this.sender && this.sender.toString() === userId.toString();
-};
-
-// ============================================
-// ✅ NEW: QUIZ NOTIFICATION HELPERS
-// ============================================
-
-/**
- * Create a quiz notification message
- * @param {String} groupId - Group ID
- * @param {String} type - 'quiz_started' or 'quiz_ended'
- * @param {Object} quizData - Quiz information
- * @returns {Promise<Message>}
- */
-messageSchema.statics.createQuizNotification = async function(groupId, type, quizData) {
-  const { quizId, sessionId, quizTitle, winnerId, winnerName, winnerScore } = quizData;
-  
-  let content = '';
-  let metadata = {
-    quizId,
-    sessionId
-  };
-  
-  if (type === 'quiz_started') {
-    content = `📝 Quiz Started: ${quizTitle}\n\nJoin now to participate! 🎮`;
-    metadata.quizTitle = quizTitle;
-  } else if (type === 'quiz_ended') {
-    content = `🎉 Quiz "${quizTitle}" completed!\n\n🏆 Today's topper: ${winnerName} with ${winnerScore} points!\n\nCheck your results in the quiz section.`;
-    metadata.winnerId = winnerId;
-    metadata.winnerName = winnerName;
-    metadata.winnerScore = winnerScore;
-  }
-  
-  const message = await this.create({
-    group: groupId,
-    messageType: type,
-    content,
-    metadata,
-    sender: null // System message
-  });
-  
-  return message;
+  return this.sender.toString() === userId.toString();
 };
 
 // ============================================
