@@ -116,12 +116,21 @@ const FloatingQuizButton = ({
     } else {
       // Student checks if quiz is available
       if (quizSession) {
-        onJoinQuiz(quizSession);
-      } else {
+        handleJoinQuiz(quizSession._id);
+      }
+      else {
         alert('📝 No quiz available right now!\n\nWait for your teacher to create and publish a quiz.');
       }
     }
   };
+  // In ChatArea.jsx
+const handleJoinQuiz = (sessionId) => {
+  socket.emit('student:joinQuiz', { sessionId });
+
+  if (onJoinQuiz) {
+    onJoinQuiz(sessionId);
+  }
+};
 
   const getButtonContent = () => {
     if (!quizSession) {

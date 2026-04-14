@@ -565,61 +565,37 @@ function getLeaderboard(session) {
 async function sendChatNotification(io, session, type, leaderboard = null) {
   try {
     const groupId = session.group;
-    let messageContent = '';
-    let metadata = {
-      quizId: session.quiz._id,
-      sessionId: session._id
-    };
-
+    
     if (type === 'quiz_started') {
-      messageContent = `📝 Quiz Started: ${session.quiz.title}\n\nJoin now to participate! 🎮`;
-      
-      // Save to database
       const message = await Message.create({
         group: groupId,
         messageType: 'quiz_started',
-        content: messageContent,
-        metadata
+        content: `📝 Quiz Started: ${session.quiz.title}\n\nJoin now!`,
+        metadata: { quizId: session.quiz._id, sessionId: session._id }
       });
-
-      // Broadcast to group chat
-      io.to(groupId.toString()).emit('newMessage', {
-        message: message,
-        type: 'quiz_notification'
-      });
-
-      console.log('📢 Quiz started notification sent to group');
+      
+      io.to(groupId.toString()).emit('newMessage', { message });
     } 
-    else if (type === 'quiz_ended' && leaderboard && leaderboard.length > 0) {
+    else if (type === 'quiz_ended') {
       const winner = leaderboard[0];
-      
-      // Get winner's name
       const winnerUser = await User.findById(winner.userId);
-      const winnerName = winnerUser ? winnerUser.name : 'Unknown';
       
-      messageContent = `🎉 Quiz "${session.quiz.title}" completed!\n\n🏆 Today's topper: ${winnerName} with ${winner.score} points!\n\nCheck your results in the quiz section.`;
-      
-      metadata.winnerId = winner.userId;
-      metadata.winnerScore = winner.score;
-      
-      // Save to database
       const message = await Message.create({
         group: groupId,
         messageType: 'quiz_ended',
-        content: messageContent,
-        metadata
+        content: `🎉 Quiz completed!\n🏆 ${winnerUser.name}: ${winner.score} pts`,
+        metadata: { 
+          quizId: session.quiz._id, 
+          sessionId: session._id,
+          winnerId: winner.userId,
+          winnerScore: winner.score
+        }
       });
-
-      // Broadcast to group chat
-      io.to(groupId.toString()).emit('newMessage', {
-        message: message,
-        type: 'quiz_notification'
-      });
-
-      console.log(`📢 Quiz ended notification sent - Winner: ${winnerName}`);
+      
+      io.to(groupId.toString()).emit('newMessage', { message });
     }
   } catch (error) {
-    console.error('❌ Chat notification error:', error);
+    console.error('Chat notification error:', error);
   }
 }
 

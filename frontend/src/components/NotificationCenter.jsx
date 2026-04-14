@@ -113,22 +113,22 @@ const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
     }
   };
 
-  const getNotificationIcon = (type) => {
-    const icons = {
-      session_scheduled: '📅',
-      session_starting: '⏰',
-      session_started: '🚀',
-      quiz_started: '🎮',
-      quiz_result: '📊',
-      message: '💬',
-      poll_created: '📊',
-      session_ended: '🏁',
-      session_cancelled: '❌',
-      attention_needed: '⚠️',
-      achievement: '🏆'
-    };
-    return icons[type] || '🔔';
+const getNotificationIcon = (type) => {
+  const icons = {
+    session_scheduled: '📅',
+    session_starting: '⏰',
+    session_started: '🚀',
+    quiz_started: '🎮',  // ← Already there!
+    quiz_result: '📊',    // ← Already there!
+    message: '💬',
+    poll_created: '📊',
+    session_ended: '🏁',
+    session_cancelled: '❌',
+    attention_needed: '⚠️',
+    achievement: '🏆'
   };
+  return icons[type] || '🔔';
+};
 
   const getTimeAgo = (date) => {
     const now = new Date();

@@ -266,6 +266,76 @@ const ChatArea = ({
     );
   };
 
+    // ✅ NEW: QUIZ NOTIFICATION RENDERING
+  const renderQuizNotification = (message) => {
+    const isQuizStarted = message.messageType === 'quiz_started';
+    const isQuizEnded = message.messageType === 'quiz_ended';
+    
+    if (!isQuizStarted && !isQuizEnded) return null;
+ 
+    const { metadata } = message;
+    const { quizId, sessionId, quizTitle, winnerName, winnerScore } = metadata || {};
+ 
+    return (
+      <div style={additionalStyles.quizNotificationContainer}>
+        {isQuizStarted && (
+          <>
+            <div style={styles.quizNotificationHeader}>
+              <span style={styles.quizIcon}>📝</span>
+              <span style={styles.quizNotificationTitle}>Quiz Started!</span>
+            </div>
+            <div style={styles.quizNotificationContent}>
+              <div style={styles.quizTitle}>{quizTitle || 'New Quiz'}</div>
+              <div style={styles.quizMessage}>Join now to participate! 🎮</div>
+            </div>
+            <button
+              onClick={() => handleJoinQuiz(sessionId, quizId)}
+              style={styles.joinQuizBtn}
+            >
+              Join Quiz
+            </button>
+          </>
+        )}
+        
+        {isQuizEnded && (
+          <>
+            <div style={styles.quizNotificationHeader}>
+              <span style={styles.quizIcon}>🎉</span>
+              <span style={styles.quizNotificationTitle}>Quiz Completed!</span>
+            </div>
+            <div style={styles.quizNotificationContent}>
+              <div style={styles.quizTitle}>{quizTitle || 'Quiz'}</div>
+              {winnerName && (
+                <div style={styles.winnerInfo}>
+                  <div style={styles.winnerBadge}>🏆</div>
+                  <div>
+                    <div style={styles.winnerName}>Top Scorer: {winnerName}</div>
+                    <div style={styles.winnerScore}>{winnerScore} points</div>
+                  </div>
+                </div>
+              )}
+              <div style={styles.quizMessage}>Check your results in the quiz section</div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+ 
+  // ✅ NEW: Handle join quiz click
+  const handleJoinQuiz = (sessionId, quizId) => {
+    // Emit event or navigate to quiz
+    if (window.location.pathname.includes('/group/')) {
+      // If on group page, trigger quiz join via global state or callback
+      if (typeof window.openQuiz === 'function') {
+        window.openQuiz(sessionId);
+      } else {
+        alert('Opening quiz...');
+        // You can emit a socket event or use a callback prop
+      }
+    }
+  };
+
   // ✅ NEW: Full-screen media viewer functions
   const openFullscreen = (fileUrl, fileType, fileName) => {
     setFullscreenMedia({ fileUrl, fileType, fileName });
@@ -523,17 +593,24 @@ const ChatArea = ({
                         </div>
                       ) : (
                         <>
-                          {isPoll && !message.isDeleted && renderPoll(message)}
-                          {message.messageType === 'file' && !message.isDeleted && renderFileAttachment(message)}
-                          {message.content && !isPoll && (
-                            <div style={{
-                              ...styles.messageContent,
-                              fontStyle: message.isDeleted ? 'italic' : 'normal',
-                              color: message.isDeleted ? '#666' : '#333'
-                            }}>
-                              {message.content}
-                            </div>
-                          )}
+                        {/* Quiz Notifications */}
+                        {(message.messageType === 'quiz_started' || message.messageType === 'quiz_ended') && 
+                          !message.isDeleted && 
+                          renderQuizNotification(message)}
+
+                        {/* Polls */}
+                        {isPoll && !message.isDeleted && renderPoll(message)}
+
+                        {/* File attachments */}
+                        {message.messageType === 'file' && !message.isDeleted && renderFileAttachment(message)}
+
+                        {/* Regular text (hide for quiz notifications) */}
+                        {message.content && 
+                        !isPoll && 
+                        message.messageType !== 'quiz_started' && 
+                        message.messageType !== 'quiz_ended' && (
+                          <div style={styles.messageContent}>{message.content}</div>
+                        )}
                         </>
                       )}
 
@@ -1183,6 +1260,81 @@ const styles = {
     flex: 1,
     width: '100%',
     border: 'none'
+  }
+};
+
+const additionalStyles = {
+  quizNotificationContainer: {
+    padding: '16px',
+    backgroundColor: 'rgba(79, 70, 229, 0.08)',
+    borderRadius: '12px',
+    border: '2px solid #4F46E5',
+    marginBottom: '4px'
+  },
+  quizNotificationHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '12px'
+  },
+  quizIcon: {
+    fontSize: '28px'
+  },
+  quizNotificationTitle: {
+    fontSize: '17px',
+    fontWeight: '700',
+    color: '#4F46E5'
+  },
+  quizNotificationContent: {
+    marginBottom: '12px'
+  },
+  quizTitle: {
+    fontSize: '16px',
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: '8px'
+  },
+  quizMessage: {
+    fontSize: '14px',
+    color: '#666',
+    marginBottom: '12px'
+  },
+  joinQuizBtn: {
+    width: '100%',
+    padding: '12px',
+    fontSize: '15px',
+    fontWeight: '700',
+    backgroundColor: '#4F46E5',
+    color: 'white',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    boxShadow: '0 2px 8px rgba(79, 70, 229, 0.3)'
+  },
+  winnerInfo: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '12px',
+    backgroundColor: 'rgba(255, 215, 0, 0.15)',
+    borderRadius: '8px',
+    marginBottom: '12px',
+    border: '1px solid rgba(255, 215, 0, 0.3)'
+  },
+  winnerBadge: {
+    fontSize: '36px'
+  },
+  winnerName: {
+    fontSize: '15px',
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: '4px'
+  },
+  winnerScore: {
+    fontSize: '13px',
+    color: '#666',
+    fontWeight: '500'
   }
 };
 
