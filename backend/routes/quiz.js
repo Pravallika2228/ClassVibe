@@ -390,6 +390,71 @@ router.get('/recent-topics', authenticateToken, async (req, res) => {
   }
 });
 
+// Start a quiz session (Teacher clicks "Start Quiz Now")
+router.post('/:quizId/start-session', authenticateToken, async (req, res) => {
+  try {
+    const { quizId } = req.params;
+ 
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
+ 
+    if (quiz.creator.toString() !== req.userId.toString()) {
+      return res.status(403).json({ error: 'Only quiz creator can start session' });
+    }
+ 
+    // Check if session already exists for this group
+    const existing = await QuizSession.findActiveSession(quiz.group);
+    if (existing) {
+      return res.json({ success: true, session: existing });
+    }
+ 
+    // Create new session
+    const session = new QuizSession({
+      quiz: quizId,
+      group: quiz.group,
+      host: req.userId,
+      status: 'waiting',
+      participants: []
+    });
+ 
+    await session.save();
+    await session.populate('quiz');
+ 
+    // Notify all students in this group via socket
+    const io = req.app.get('io');
+    if (io) {
+      io.to(quiz.group.toString()).emit('quizStarted', {
+        sessionId: session._id,
+        quizTitle: quiz.title,
+        quizId: quiz._id,
+        session: session
+      });
+    }
+ 
+    console.log('✅ Quiz session created:', session._id);
+ 
+    res.json({ success: true, session });
+ 
+  } catch (error) {
+    console.error('Start session error:', error);
+    res.status(500).json({ error: 'Failed to start quiz session' });
+  }
+});
+ 
+// Get active quiz session for a group (used by FloatingQuizButton)
+router.get('/group/:groupId/active', authenticateToken, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+ 
+    const session = await QuizSession.findActiveSession(groupId);
+ 
+    res.json({ session: session || null });
+ 
+  } catch (error) {
+    console.error('Get active session error:', error);
+    res.status(500).json({ error: 'Failed to get active session' });
+  }
+});
 // ... Keep all other existing routes (start session, join, etc.) from previous quiz.js ...
 // (I'm shortening this for space, but include ALL the session management routes from your original file)
 

@@ -532,7 +532,7 @@ function App() {
       {activeQuizSession && user?.role === 'teacher' && (
         <QuizHost
           quiz={activeQuizSession.quiz}
-          session={activeQuizSession}
+          sessionId={activeQuizSession._id}   // ← correct prop name
           onClose={() => setActiveQuizSession(null)}
           socket={socket}
         />

@@ -361,44 +361,65 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
   };
 
   // Save quiz
-  const handleSaveChanges = async () => {
-    if (!generatedQuizId) return;
 
-    setLoading(true);
-    
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL || 'https://classvibe-backend.onrender.com'}/api/quiz/${generatedQuizId}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            questions,
-            settings,
-            status: 'ready'
-          })
+  // ✅ FIX — after saving, also start the session
+    const handleSaveChanges = async (shouldStart = false) => {
+      if (!generatedQuizId) return;
+      setLoading(true);
+
+      try {
+        const token = localStorage.getItem('token');
+
+        // Step 1: Save quiz
+        const saveResponse = await fetch(
+          `${process.env.REACT_APP_API_URL || 'https://classvibe-backend.onrender.com'}/api/quiz/${generatedQuizId}`,
+          {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({ questions, settings, status: 'ready' })
+          }
+        );
+
+        const saveData = await saveResponse.json();
+        if (!saveResponse.ok) {
+          setError(saveData.error || 'Failed to save quiz');
+          return;
         }
-      );
 
-      const data = await response.json();
+        // Step 2: If "Start Now" was clicked, create a session
+        if (shouldStart) {
+          const sessionResponse = await fetch(
+            `${process.env.REACT_APP_API_URL || 'https://classvibe-backend.onrender.com'}/api/quiz/${generatedQuizId}/start-session`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              }
+            }
+          );
 
-      if (response.ok) {
-        if (onSuccess) onSuccess(data.quiz);
+          const sessionData = await sessionResponse.json();
+          if (!sessionResponse.ok) {
+            setError(sessionData.error || 'Failed to start session');
+            return;
+          }
+
+          if (onSuccess) onSuccess(sessionData.session); // ← passes session to App.js
+        } else {
+          if (onSuccess) onSuccess(null);
+        }
+
         onClose();
-      } else {
-        setError(data.error || 'Failed to save quiz');
+      } catch (error) {
+        setError('Failed to save quiz');
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Save error:', error);
-      setError('Failed to save quiz');
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
   // ========================================
   // RENDER HELPERS
