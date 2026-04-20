@@ -55,7 +55,7 @@ class AIQuizGenerator {
   /**
    * Generate quiz from text topic with multiple question types
    */
-  async generateFromText(topic, questionCount = 10, difficulty = 'medium') {
+  async generateFromText(topic, questionCount = 6, difficulty = 'medium') {
     const difficultyPrompts = {
       easy: 'Create basic, fundamental questions suitable for beginners.',
       medium: 'Create intermediate-level questions that test understanding and application.',
@@ -63,7 +63,8 @@ class AIQuizGenerator {
       expert: 'Create expert-level questions suitable for graduate students and professionals.'
     };
 
-    const prompt = `You are a professional quiz creator for college/university students. Generate ${questionCount} high-quality questions about "${topic}".
+    const prompt = `You are a professional quiz creator for college/university students. Generate ${questionCount} concise questions about "${topic}". 
+     Return ONLY JSON.
 
       ${difficultyPrompts[difficulty] || difficultyPrompts.medium}
 
@@ -133,22 +134,22 @@ class AIQuizGenerator {
           messages: [
             {
               role: 'system',
-              content: 'You are an expert educational quiz creator. Always return valid JSON only.'
+              content: 'Return only JSON quiz questions.'
             },
             {
               role: 'user',
               content: prompt
             }
           ],
-          temperature: 0.7,
-          max_tokens: 8000,
+          temperature: 0.5,
+          max_tokens: 1500
         },
         {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.apiKey}`
           },
-          timeout: 90000 // ✅ Increased timeout
+          timeout: 60000
         }
       );
 
@@ -188,7 +189,7 @@ class AIQuizGenerator {
   /**
    * Generate quiz from file content (PDF, DOCX, TXT)
    */
-  async generateFromFile(filePath, questionCount = 10, difficulty = 'medium', description = '') {
+  async generateFromFile(filePath, questionCount = 6, difficulty = 'medium', description = '') {
     try {
       await this.getWorkingModel(); // ✅ ADD THIS LINE - auto-selects working model
       console.log('📄 Reading file:', filePath);
@@ -293,22 +294,22 @@ class AIQuizGenerator {
           messages: [
             {
               role: 'system',
-              content: 'You are an expert quiz creator. Analyze content and create educational questions. Return ONLY valid JSON.'
+              content: 'Return only JSON quiz questions.'
             },
             {
               role: 'user',
               content: prompt
             }
           ],
-          temperature: 0.6,
-          max_tokens: 8000,
+          temperature: 0.5,
+          max_tokens: 1500
         },
         {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.apiKey}`
           },
-          timeout: 120000 // ✅ 2 minute timeout for file processing
+          timeout: 60000
         }
       );
 
@@ -354,7 +355,7 @@ class AIQuizGenerator {
   /**
    * ✅ NEW: Generate quiz from YouTube video link
    */
-  async generateFromYouTube(videoUrl, questionCount = 10, difficulty = 'medium', description = '') {
+  async generateFromYouTube(videoUrl, questionCount = 6, difficulty = 'medium', description = '') {
     try {
       console.log('📺 Processing YouTube video:', videoUrl);
 
@@ -375,7 +376,7 @@ class AIQuizGenerator {
   /**
    * ✅ NEW: Generate quiz from website link
    */
-  async generateFromWebsite(websiteUrl, questionCount = 10, difficulty = 'medium', description = '') {
+  async generateFromWebsite(websiteUrl, questionCount = 6, difficulty = 'medium', description = '') {
     try {
       console.log('🌐 Processing website:', websiteUrl);
 
@@ -546,18 +547,23 @@ class AIQuizGenerator {
           model: this.model,
           messages: [
             {
+              role: 'system',
+              content: 'Return only JSON quiz questions.'
+            },
+            {
               role: 'user',
-              content: 'Respond with: "API connection successful"'
+              content: prompt
             }
           ],
-          max_tokens: 20
+          temperature: 0.5,
+          max_tokens: 1500
         },
         {
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${this.apiKey}`
           },
-          timeout: 10000
+          timeout: 60000
         }
       );
 
