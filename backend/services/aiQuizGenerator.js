@@ -10,9 +10,46 @@ class AIQuizGenerator {
   constructor() {
     this.apiKey = process.env.GROQ_API_KEY;
     this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    this.model = 'llama-3.3-70b-specdec';
-    // OR if that's decommissioned:
-    this.model = 'llama-3.3-70b-specdec'; // Better model for complex tasks
+    
+    // ✅ Priority list - if first is decommissioned, auto-tries next
+    this.modelFallbacks = [
+      'llama-3.1-8b-instant',        // Fast, almost never decommissioned
+      'llama3-8b-8192',              // Backup
+      'mixtral-8x7b-32768',         // Another stable option
+      'gemma2-9b-it'                 // Google's model on Groq
+    ];
+    
+    this.model = this.modelFallbacks[0]; // Start with first
+  }
+
+  // ✅ NEW: Auto-find working model
+  async getWorkingModel() {
+    for (const model of this.modelFallbacks) {
+      try {
+        await axios.post(
+          this.apiUrl,
+          {
+            model,
+            messages: [{ role: 'user', content: 'hi' }],
+            max_tokens: 5
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiKey}`
+            },
+            timeout: 8000
+          }
+        );
+        console.log(`✅ Using model: ${model}`);
+        this.model = model;
+        return model;
+      } catch (err) {
+        const reason = err.response?.data?.error?.code || err.message;
+        console.warn(`⚠️ Model ${model} unavailable (${reason}), trying next...`);
+      }
+    }
+    throw new Error('All Groq models are currently unavailable. Please try again later.');
   }
 
   /**
