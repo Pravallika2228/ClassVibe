@@ -10,7 +10,9 @@ class AIQuizGenerator {
   constructor() {
     this.apiKey = process.env.GROQ_API_KEY;
     this.apiUrl = 'https://api.groq.com/openai/v1/chat/completions';
-    this.model = 'llama-3.3-70b-versatile'; // Better model for complex tasks
+    this.model = 'llama-3.3-70b-specdec';
+    // OR if that's decommissioned:
+    this.model = 'llama-3.3-70b-specdec'; // Better model for complex tasks
   }
 
   /**
@@ -389,64 +391,102 @@ Return ONLY a valid JSON array with this EXACT structure:
     }
 
     return questions.map((q, index) => {
-      if (!q.questionText || !q.options || !Array.isArray(q.options)) {
+      if (!q.questionText) {
         throw new Error(`Invalid question structure at position ${index + 1}`);
       }
 
-      // Ensure 4 options
-      while (q.options.length < 4) q.options.push(`Option ${q.options.length + 1}`);
-      if (q.options.length > 4) q.options = q.options.slice(0, 4);
+      const questionType = q.questionType || 'multiple_choice';
 
-      // Clean options prefixes like A), B), etc.
-      q.options = q.options.map(opt => {
-        if (typeof opt !== 'string') opt = String(opt);
-        return opt.replace(/^[A-D][\)\.:\-\s]+/i, '').trim();
-      });
+      // ✅ Handle options per question type
+      if (!Array.isArray(q.options)) q.options = [];
 
-      // ✅ STRONG FIX: Handle all possible correctAnswer formats
-      let correctIndex = 0;
+      if (questionType === 'fill_in_blank') {
+        // fill_in_blank doesn't need options
+        q.options = [];
 
-      if (typeof q.correctAnswer === 'number') {
-        // Already a number
-        correctIndex = q.correctAnswer;
+      } else if (questionType === 'true_false') {
+        q.options = ['True', 'False'];
 
-      } else if (typeof q.correctAnswer === 'string') {
-        const val = q.correctAnswer.trim();
+      } else if (questionType === 'multiple_select') {
+        // Keep options as-is, just clean prefixes
+        q.options = q.options.map(opt => {
+          if (typeof opt !== 'string') opt = String(opt);
+          return opt.replace(/^[A-E][\)\.:\-\s]+/i, '').trim();
+        });
 
-        // Case 1: "0", "1", "2", "3"
-        if (/^[0-3]$/.test(val)) {
-          correctIndex = parseInt(val);
-
-        // Case 2: "A", "B", "C", "D"
-        } else if (/^[A-Da-d]$/.test(val)) {
-          correctIndex = val.toUpperCase().charCodeAt(0) - 65;
-
-        // Case 3: Full answer text — find matching option
-        } else {
-          const matchIndex = q.options.findIndex(opt =>
-            opt.toLowerCase().trim() === val.toLowerCase().trim() ||
-            opt.toLowerCase().includes(val.toLowerCase()) ||
-            val.toLowerCase().includes(opt.toLowerCase())
-          );
-          correctIndex = matchIndex >= 0 ? matchIndex : 0;
-          if (matchIndex < 0) {
-            console.warn(`⚠️ Could not match correctAnswer "${val}" to options, defaulting to 0`);
-          }
+      } else {
+        // multiple_choice: enforce exactly 4 options
+        const questionType = q.questionType || 'multiple_choice';
+        if (questionType === 'multiple_choice' || questionType === 'true_false') {
+          while (q.options.length < 4) q.options.push(`Option ${q.options.length + 1}`);
+          if (q.options.length > 4) q.options = q.options.slice(0, 4);
         }
-
-      } else if (Array.isArray(q.correctAnswer)) {
-        // Sometimes AI returns [0, 3] — take first valid value
-        const first = q.correctAnswer.find(v => typeof v === 'number' && v >= 0 && v <= 3);
-        correctIndex = first !== undefined ? first : 0;
+        if (q.options.length > 4) q.options = q.options.slice(0, 4);
+        q.options = q.options.map(opt => {
+          if (typeof opt !== 'string') opt = String(opt);
+          return opt.replace(/^[A-D][\)\.:\-\s]+/i, '').trim();
+        });
       }
 
-      // Clamp to valid range
-      if (correctIndex < 0 || correctIndex > 3) correctIndex = 0;
+      // ✅ Handle correctAnswer per question type
+      let correctAnswer;
+
+      if (questionType === 'fill_in_blank') {
+        // Keep as string
+        correctAnswer = String(q.correctAnswer || '').trim().toLowerCase();
+
+      } else if (questionType === 'true_false') {
+        // Convert to boolean or 0/1 index
+        if (typeof q.correctAnswer === 'boolean') {
+          correctAnswer = q.correctAnswer ? 0 : 1; // 0=True, 1=False
+        } else if (typeof q.correctAnswer === 'string') {
+          correctAnswer = q.correctAnswer.toLowerCase() === 'true' ? 0 : 1;
+        } else {
+          correctAnswer = 0;
+        }
+
+      } else if (questionType === 'multiple_select') {
+        // Keep as array of numbers
+        if (Array.isArray(q.correctAnswer)) {
+          correctAnswer = q.correctAnswer
+            .filter(v => typeof v === 'number' && v >= 0)
+            .map(v => Math.floor(v));
+        } else {
+          correctAnswer = [0]; // fallback
+        }
+
+      } else {
+        // multiple_choice: must be a number 0-3
+        let correctIndex = 0;
+        if (typeof q.correctAnswer === 'number') {
+          correctIndex = q.correctAnswer;
+        } else if (typeof q.correctAnswer === 'string') {
+          const val = q.correctAnswer.trim();
+          if (/^[0-3]$/.test(val)) {
+            correctIndex = parseInt(val);
+          } else if (/^[A-Da-d]$/.test(val)) {
+            correctIndex = val.toUpperCase().charCodeAt(0) - 65;
+          } else {
+            const matchIndex = q.options.findIndex(opt =>
+              opt.toLowerCase().trim() === val.toLowerCase().trim() ||
+              opt.toLowerCase().includes(val.toLowerCase()) ||
+              val.toLowerCase().includes(opt.toLowerCase())
+            );
+            correctIndex = matchIndex >= 0 ? matchIndex : 0;
+          }
+        } else if (Array.isArray(q.correctAnswer)) {
+          const first = q.correctAnswer.find(v => typeof v === 'number' && v >= 0 && v <= 3);
+          correctIndex = first !== undefined ? first : 0;
+        }
+        if (correctIndex < 0 || correctIndex > 3) correctIndex = 0;
+        correctAnswer = correctIndex;
+      }
 
       return {
         questionText: q.questionText.trim(),
+        questionType,
         options: q.options,
-        correctAnswer: correctIndex,  // ✅ Always a number now
+        correctAnswer,
         explanation: (q.explanation || 'This is the correct answer.').trim(),
         points: q.points || 10,
         timeLimit: q.timeLimit || 30,
