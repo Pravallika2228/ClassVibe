@@ -109,7 +109,7 @@ if (process.env.ENABLE_SESSION_REMINDERS !== 'false') {
 }
 
 // In socket connection
-const { setupQuizSocketHandlers, cleanupQuizTimers } = require('./socket-handlers/quiz-socket-handler');
+const { setupQuizSocketHandlers, cleanupQuizTimers } = require('./socket-handlers/quiz-socket-handlers');
 
 io.on('connection', (socket) => {
   setupQuizSocketHandlers(io, socket); // ← ADD THIS LINE
