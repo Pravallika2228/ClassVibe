@@ -65,64 +65,66 @@ class AIQuizGenerator {
 
     const prompt = `You are a professional quiz creator for college/university students. Generate ${questionCount} high-quality questions about "${topic}".
 
-${difficultyPrompts[difficulty] || difficultyPrompts.medium}
+      ${difficultyPrompts[difficulty] || difficultyPrompts.medium}
 
-QUESTION TYPE DISTRIBUTION:
-- 60% Multiple Choice (4 options, 1 correct answer)
-- 20% Fill in the Blanks (single word/short phrase answer)
-- 10% True/False
-- 10% Multiple Select (select all correct answers)
+      QUESTION TYPE DISTRIBUTION:
+      - 60% Multiple Choice (4 options, 1 correct answer)
+      - 20% Fill in the Blanks (single word/short phrase answer)
+      - 10% True/False
+      - 10% Multiple Select (select all correct answers)
 
-Requirements:
-- Questions should be clear, precise, and professional
-- Avoid trivial or overly simple questions
-- Include real-world applications when possible
-- Multiple Choice: exactly 4 options, only ONE correct answer
-- Fill in the Blanks: one word or short phrase answer (lowercase)
-- True/False: statement that can be definitively true or false
-- Multiple Select: 2-3 correct answers out of 4-5 options
-- Provide detailed explanations for all answers
+      Requirements:
+      - Questions should be clear, precise, and professional
+      - Avoid trivial or overly simple questions
+      - Include real-world applications when possible
+      - Multiple Choice: exactly 4 options, only ONE correct answer
+      - Fill in the Blanks: one word or short phrase answer (lowercase)
+      - True/False: statement that can be definitively true or false
+      - Multiple Select: 2-3 correct answers out of 4-5 options
+      - Provide detailed explanations for all answers
 
-Return ONLY a valid JSON array (no markdown, no backticks, no extra text):
-[
-  {
-    "questionText": "Clear, concise question here",
-    "questionType": "multiple_choice",
-    "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
-    "correctAnswer": 0,
-    "explanation": "Detailed explanation",
-    "points": 10
-  },
-  {
-    "questionText": "The _____ is the powerhouse of the cell",
-    "questionType": "fill_in_blank",
-    "correctAnswer": "mitochondria",
-    "options": [],
-    "explanation": "Mitochondria generate ATP through cellular respiration",
-    "points": 10
-  },
-  {
-    "questionText": "DNA is made of nucleotides",
-    "questionType": "true_false",
-    "correctAnswer": true,
-    "options": ["True", "False"],
-    "explanation": "DNA is a polymer of nucleotides",
-    "points": 10
-  },
-  {
-    "questionText": "Select all programming languages (multiple select)",
-    "questionType": "multiple_select",
-    "options": ["Python", "HTML", "JavaScript", "CSS", "Java"],
-    "correctAnswer": [0, 2, 4],
-    "explanation": "Python, JavaScript, and Java are programming languages",
-    "points": 15
-  }
-]
+      Return ONLY a valid JSON array (no markdown, no backticks, no extra text):
+      [
+        {
+          "questionText": "Clear, concise question here",
+          "questionType": "multiple_choice",
+          "options": ["Option 1", "Option 2", "Option 3", "Option 4"],
+          "correctAnswer": 0,
+          "explanation": "Detailed explanation",
+          "points": 10
+        },
+        {
+          "questionText": "The _____ is the powerhouse of the cell",
+          "questionType": "fill_in_blank",
+          "correctAnswer": "mitochondria",
+          "options": [],
+          "explanation": "Mitochondria generate ATP through cellular respiration",
+          "points": 10
+        },
+        {
+          "questionText": "DNA is made of nucleotides",
+          "questionType": "true_false",
+          "correctAnswer": true,
+          "options": ["True", "False"],
+          "explanation": "DNA is a polymer of nucleotides",
+          "points": 10
+        },
+        {
+          "questionText": "Select all programming languages (multiple select)",
+          "questionType": "multiple_select",
+          "options": ["Python", "HTML", "JavaScript", "CSS", "Java"],
+          "correctAnswer": [0, 2, 4],
+          "explanation": "Python, JavaScript, and Java are programming languages",
+          "points": 15
+        }
+      ]
 
-CRITICAL: Return ONLY the JSON array, nothing else. No markdown formatting.`;
+      CRITICAL: Return ONLY the JSON array, nothing else. No markdown formatting.`;
 
     try {
-      console.log('🤖 Calling Groq API for quiz generation...');
+      await this.getWorkingModel(); // ✅ ADD THIS LINE - auto-selects working model
+      console.log('🤖 Calling Groq API...');
+      // ... rest of existing code unchanged
 
       const response = await axios.post(
         this.apiUrl,
@@ -188,6 +190,7 @@ CRITICAL: Return ONLY the JSON array, nothing else. No markdown formatting.`;
    */
   async generateFromFile(filePath, questionCount = 10, difficulty = 'medium', description = '') {
     try {
+      await this.getWorkingModel(); // ✅ ADD THIS LINE - auto-selects working model
       console.log('📄 Reading file:', filePath);
 
       let fileContent = '';
@@ -246,40 +249,40 @@ CRITICAL: Return ONLY the JSON array, nothing else. No markdown formatting.`;
 
       const prompt = `You are a professional quiz creator. Analyze the following educational content and generate ${questionCount} high-quality questions.${descriptionPrompt}
 
-CONTENT:
-${fileContent}
+        CONTENT:
+        ${fileContent}
 
-QUESTION TYPE DISTRIBUTION:
-- 60% Multiple Choice (4 options, 1 correct answer)
-- 20% Fill in the Blanks (one word answer)
-- 10% True/False
-- 10% Multiple Select (2-3 correct answers)
+        QUESTION TYPE DISTRIBUTION:
+        - 60% Multiple Choice (4 options, 1 correct answer)
+        - 20% Fill in the Blanks (one word answer)
+        - 10% True/False
+        - 10% Multiple Select (2-3 correct answers)
 
-Requirements:
-- Focus on key concepts and important details from the content
-- Create questions at ${difficulty} difficulty level
-- All questions must be directly answerable from the provided content
-- Provide detailed explanations referencing the content
+        Requirements:
+        - Focus on key concepts and important details from the content
+        - Create questions at ${difficulty} difficulty level
+        - All questions must be directly answerable from the provided content
+        - Provide detailed explanations referencing the content
 
-Return ONLY a valid JSON array with this EXACT structure:
-[
-  {
-    "questionText": "question text",
-    "questionType": "multiple_choice",
-    "options": ["A", "B", "C", "D"],
-    "correctAnswer": 0,
-    "explanation": "why this is correct",
-    "points": 10
-  },
-  {
-    "questionText": "Fill blank: The _____ is...",
-    "questionType": "fill_in_blank",
-    "correctAnswer": "answer_word",
-    "options": [],
-    "explanation": "explanation",
-    "points": 10
-  }
-]`;
+        Return ONLY a valid JSON array with this EXACT structure:
+        [
+          {
+            "questionText": "question text",
+            "questionType": "multiple_choice",
+            "options": ["A", "B", "C", "D"],
+            "correctAnswer": 0,
+            "explanation": "why this is correct",
+            "points": 10
+          },
+          {
+            "questionText": "Fill blank: The _____ is...",
+            "questionType": "fill_in_blank",
+            "correctAnswer": "answer_word",
+            "options": [],
+            "explanation": "explanation",
+            "points": 10
+          }
+        ]`;
 
       console.log('🤖 Sending file content to Groq API...');
 
