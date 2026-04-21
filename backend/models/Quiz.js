@@ -62,10 +62,8 @@ const quizSchema = new mongoose.Schema({
     
     // Index of correct answer (0-3)
     correctAnswer: {
-      type: Number,
-      required: true,
-      min: 0,
-      max: 3
+      type: mongoose.Schema.Types.Mixed,
+      required: true
     },
     
     // Explanation (optional)

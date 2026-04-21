@@ -520,14 +520,14 @@ class AIQuizGenerator {
           correctIndex = first !== undefined ? first : 0;
         }
         if (correctIndex < 0 || correctIndex > 3) correctIndex = 0;
-        correctAnswer = correctIndex;
+        
       }
 
       return {
         questionText: q.questionText.trim(),
         questionType,
         options: q.options,
-        correctAnswer,
+        correctAnswer, // 🔥 keep as-is (string/array/number)
         explanation: (q.explanation || 'This is the correct answer.').trim(),
         points: q.points || 10,
         timeLimit: q.timeLimit || 30,

@@ -64,7 +64,12 @@ const quizResultSchema = new mongoose.Schema({
     questionIndex: Number,
     questionText: String,
     selectedAnswer: Number,
-    correctAnswer: Number,
+
+    correctAnswer: {
+      type: mongoose.Schema.Types.Mixed, // 🔥 THIS FIXES EVERYTHING
+      required: true
+    },
+
     isCorrect: Boolean,
     points: Number,
     timeTaken: Number, // seconds
@@ -77,7 +82,7 @@ const quizResultSchema = new mongoose.Schema({
     required: true
   },
   
-  completedAt: {
+  completedAt: {  
     type: Date,
     required: true
   },
