@@ -11,7 +11,7 @@ const FloatingQuizButton = ({
   socket 
 }) => {
   const [quizSession, setQuizSession] = useState(null);
-  const [pulse, setPulse] = useState(false);
+  const [pulse] = useState(false);
 
   // ✅ FIX: Better error handling and authentication
   const checkActiveQuiz = useCallback(async () => {
@@ -79,19 +79,12 @@ const FloatingQuizButton = ({
   useEffect(() => {
     if (!socket || !groupId) return;
 
-    // Listen for quiz started (teacher published)
-    socket.on('quizStarted', (data) => {
-      console.log('🎮 Quiz started event received');
-      setQuizSession({ status: 'waiting', ...data });
-      setPulse(true);
-      setTimeout(() => setPulse(false), 2000);
+    socket.on('quiz:started', (data) => {
+      console.log('🎮 Quiz started (correct event)');
+      setQuizSession({ status: 'active', ...data });
     });
-
-    // Listen for quiz began (teacher clicked "Start Quiz")
-    socket.on('quizBegan', () => {
-      console.log('🚀 Quiz began event received');
-      setQuizSession(prev => ({ ...prev, status: 'active' }));
-    });
+  
+    
 
     // Listen for quiz ended
     socket.on('quizEnded', () => {

@@ -323,16 +323,17 @@ const ChatArea = ({
   };
  
   // ✅ NEW: Handle join quiz click
-  const handleJoinQuiz = (sessionId, quizId) => {
-    // Emit event or navigate to quiz
-    if (window.location.pathname.includes('/group/')) {
-      // If on group page, trigger quiz join via global state or callback
-      if (typeof window.openQuiz === 'function') {
-        window.openQuiz(sessionId);
-      } else {
-        alert('Opening quiz...');
-        // You can emit a socket event or use a callback prop
-      }
+  const handleJoinQuiz = (sessionId) => {
+    console.log("🚀 Joining quiz:", sessionId);
+
+    socket.emit('student:joinQuiz', { sessionId });
+
+    // Open quiz player UI
+    if (typeof window.openQuiz === 'function') {
+      window.openQuiz(sessionId);
+    } else {
+      // fallback: reload or trigger state
+      window.location.href = `/quiz/${sessionId}`;
     }
   };
 

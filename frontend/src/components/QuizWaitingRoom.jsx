@@ -21,7 +21,7 @@ const QuizWaitingRoom = ({ session, onClose, socket }) => {
 
     // Listen for quiz starting
     socket.on('quizBegan', (data) => {
-      console.log('▶️ Quiz started!');
+      console.log('🚀 Quiz started!');
       setStatus('active');
       // Auto-close waiting room and open quiz player
       setTimeout(() => {

@@ -65,9 +65,13 @@ const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
       }
     }
 
-    if (notification.actionUrl) {
+    console.log("📍 Notification clicked:", notification);
+
+    if (notification.actionUrl && notification.actionUrl !== '/') {
       onClose();
       navigate(notification.actionUrl);
+    } else {
+      console.warn("⚠️ Invalid actionUrl:", notification);
     }
   };
 
