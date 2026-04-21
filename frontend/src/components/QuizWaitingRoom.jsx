@@ -20,13 +20,13 @@ const QuizWaitingRoom = ({ session, onClose, socket }) => {
     });
 
     // Listen for quiz starting
-    socket.on('quizBegan', (data) => {
+    socket.on('quiz:started', (data) => {
       console.log('🚀 Quiz started!');
       setStatus('active');
       // Auto-close waiting room and open quiz player
       setTimeout(() => {
-        window.location.reload(); // Or navigate to quiz player
-      }, 1000);
+        window.dispatchEvent(new CustomEvent('startQuiz', { detail: data }));
+      }, 500);
     });
 
     return () => {

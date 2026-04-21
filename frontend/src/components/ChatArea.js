@@ -274,7 +274,7 @@ const ChatArea = ({
     if (!isQuizStarted && !isQuizEnded) return null;
  
     const { metadata } = message;
-    const { quizId, sessionId, quizTitle, winnerName, winnerScore } = metadata || {};
+    const { sessionId, quizTitle, winnerName, winnerScore } = metadata || {};
  
     return (
       <div style={additionalStyles.quizNotificationContainer}>
@@ -289,7 +289,9 @@ const ChatArea = ({
               <div style={styles.quizMessage}>Join now to participate! 🎮</div>
             </div>
             <button
-              onClick={() => handleJoinQuiz(sessionId, quizId)}
+              
+              onClick={() => handleJoinQuiz(sessionId)}
+
               style={styles.joinQuizBtn}
             >
               Join Quiz
@@ -328,13 +330,10 @@ const ChatArea = ({
 
     socket.emit('student:joinQuiz', { sessionId });
 
-    // Open quiz player UI
-    if (typeof window.openQuiz === 'function') {
-      window.openQuiz(sessionId);
-    } else {
-      // fallback: reload or trigger state
-      window.location.href = `/quiz/${sessionId}`;
-    }
+    // ✅ OPEN WAITING ROOM (CORRECT FLOW)
+    window.dispatchEvent(new CustomEvent('openWaitingRoom', {
+      detail: { sessionId }
+    }));
   };
 
   // ✅ NEW: Full-screen media viewer functions

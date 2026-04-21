@@ -233,17 +233,36 @@ function setupQuizSocketHandlers(io, socket) {
       socket.emit('quiz:joined', {
         sessionId,
         status: session.status,
-        currentQuestion: currentQuestionData,
-        timeRemaining,
         totalQuestions: session.quiz.questions.length,
-        quizTitle: session.quiz.title
+        currentQuestion: session.status === 'active'
+          ? {
+              questionIndex: session.currentQuestionIndex,
+              question: session.quiz.questions[session.currentQuestionIndex]
+            }
+          : null,
+        timeRemaining: 30
       });
 
       // Notify teacher
-      io.to(sessionId).emit('student:joined', {
+      io.to(sessionId).emit('participantJoined',{
         userId: socket.userId,
         studentCount: session.participants.length
       });
+
+      if (session.status === 'active') {
+        const currentQ = session.quiz.questions[session.currentQuestionIndex];
+
+        socket.emit('quiz:started', {
+          sessionId,
+          questionIndex: session.currentQuestionIndex,
+          question: {
+            questionText: currentQ.questionText,
+            options: currentQ.options,
+            timeLimit: currentQ.timeLimit
+          },
+          totalQuestions: session.quiz.questions.length
+        });
+      }
 
       console.log('✅ Student joined successfully');
 

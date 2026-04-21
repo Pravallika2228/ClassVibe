@@ -70,6 +70,18 @@ const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
     if (notification.actionUrl && notification.actionUrl !== '/') {
       onClose();
       navigate(notification.actionUrl);
+
+      if (notification.type === 'quiz_started') {
+        const sessionId = notification.metadata?.sessionId;
+
+        window.dispatchEvent(new CustomEvent('openWaitingRoom', {
+          detail: { sessionId }
+        }));
+
+        onClose();
+        return;
+      }    
+
     } else {
       console.warn("⚠️ Invalid actionUrl:", notification);
     }

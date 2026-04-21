@@ -38,6 +38,30 @@ function App() {
 
   const getUserId = (u) => u?.id ?? u?._id ?? u?.userId ?? null;
 
+  const [showWaitingRoom, setShowWaitingRoom] = useState(false);
+  const [quizSessionId, setQuizSessionId] = useState(null);
+  const [showQuizPlayer, setShowQuizPlayer] = useState(false);
+
+  useEffect(() => {
+    const openWaitingRoom = (e) => {
+      setQuizSessionId(e.detail.sessionId);
+      setShowWaitingRoom(true);
+    };
+
+    const startQuiz = (e) => {
+      setShowWaitingRoom(false);
+      setShowQuizPlayer(true);
+    };
+
+    window.addEventListener('openWaitingRoom', openWaitingRoom);
+    window.addEventListener('startQuiz', startQuiz);
+
+    return () => {
+      window.removeEventListener('openWaitingRoom', openWaitingRoom);
+      window.removeEventListener('startQuiz', startQuiz);
+    };
+  }, []);
+  
   const loadGroups = useCallback(async (autoSelect = false) => {
     try {
       const response = await getMyGroups();
@@ -544,6 +568,21 @@ function App() {
           session={activeQuizSession}
           onClose={() => setActiveQuizSession(null)}
           socket={socket}
+        />
+      )}
+
+      {showWaitingRoom && (
+        <QuizWaitingRoom
+          session={{ _id: quizSessionId }}
+          socket={socket}
+          onClose={() => setShowWaitingRoom(false)}
+        />
+      )}
+
+      {showQuizPlayer && (
+        <QuizPlayer
+          sessionId={quizSessionId}
+          onClose={() => setShowQuizPlayer(false)}
         />
       )}
 
