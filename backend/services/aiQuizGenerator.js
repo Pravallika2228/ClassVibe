@@ -520,7 +520,7 @@ class AIQuizGenerator {
           correctIndex = first !== undefined ? first : 0;
         }
         if (correctIndex < 0 || correctIndex > 3) correctIndex = 0;
-        
+        correctAnswer = correctIndex;
       }
 
       return {
