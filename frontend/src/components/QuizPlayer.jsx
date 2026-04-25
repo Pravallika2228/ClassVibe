@@ -1,5 +1,5 @@
 // frontend/src/components/QuizPlayer.jsx
-// Complete Quiz Player with ALL Question Types Support
+// Complete Quiz Player with ALL Question Types Support - FIXED VERSION
 
 import React, { useState, useEffect, useRef } from 'react';
 import socket from '../socket';
@@ -12,25 +12,8 @@ const QuizPlayer = ({ sessionId, onClose }) => {
   const [totalQuestions, setTotalQuestions] = useState(0);
   
   // Answer state
-  const [selectedAnswer, setSelectedAnswer] = useState(null);
-  <input
-    type="radio"
-    name="option"
-    checked={selectedAnswer === index}
-    onChange={() => setSelectedAnswer(index)}
-  />
-  socket.emit('quiz:submitAnswer', {
-    sessionId,
-    answer: selectedAnswer || selectedAnswers || textAnswer
-  });
+  const [selectedAnswer, setSelectedAnswer] = useState(null); // For MC/TF
   const [selectedAnswers, setSelectedAnswers] = useState([]); // For multiple_select
-  const handleMultiSelect = (index) => {
-    setSelectedAnswers(prev =>
-      prev.includes(index)
-        ? prev.filter(i => i !== index)
-        : [...prev, index]
-    );
-  };
   const [textAnswer, setTextAnswer] = useState(''); // For fill_in_blank
   const [hasAnswered, setHasAnswered] = useState(false);
   const [answerSummary, setAnswerSummary] = useState(null);
@@ -47,14 +30,6 @@ const QuizPlayer = ({ sessionId, onClose }) => {
   // Leaderboard state
   const [leaderboard, setLeaderboard] = useState([]);
   const [myRank, setMyRank] = useState(null);
-
-  const [textAnswer, setTextAnswer] = useState("");
-  <input
-    type="text"
-    value={textAnswer}
-    onChange={(e) => setTextAnswer(e.target.value)}
-    placeholder="Type your answer..."
-  />
   
   // Final view tabs
   const [finalTab, setFinalTab] = useState('leaderboard');
@@ -141,8 +116,8 @@ const QuizPlayer = ({ sessionId, onClose }) => {
       console.log('📊 Answer summary received');
       setAnswerSummary(data);
       setMyScore(data.currentScore);
-      setMyStreak(data.streak || 0); // ✅ Update streak
-      setSpeedMultiplier(data.speedMultiplier || 1.0); // ✅ Update speed multiplier
+      setMyStreak(data.streak || 0);
+      setSpeedMultiplier(data.speedMultiplier || 1.0);
       setMyAnswers(prev => [...prev, {
         questionIndex: data.questionIndex,
         questionText: data.questionText,
@@ -237,7 +212,7 @@ const QuizPlayer = ({ sessionId, onClose }) => {
       socket.off('quiz:finished');
       socket.off('error');
     };
-  });
+  }, [sessionId, hasAnswered, myScore, userId]);
 
   // ========================================
   // HELPER FUNCTIONS
@@ -374,7 +349,7 @@ const QuizPlayer = ({ sessionId, onClose }) => {
       );
     }
 
-    // ✅ TRUE/FALSE or MULTIPLE CHOICE - Radio Buttons
+    // ✅ TRUE/FALSE or MULTIPLE CHOICE - Radio Buttons  
     return (
       <div style={styles.optionsGrid}>
         {currentQuestion?.options.map((option, index) => {
@@ -465,7 +440,7 @@ const QuizPlayer = ({ sessionId, onClose }) => {
               </div>
             </div>
             <div style={styles.headerRight}>
-              {/* ✅ Streak Display */}
+              {/* Streak Display */}
               {myStreak > 0 && (
                 <div style={styles.streakDisplay}>
                   🔥 {myStreak}
@@ -551,7 +526,7 @@ const QuizPlayer = ({ sessionId, onClose }) => {
                   <span style={styles.multiplierBadge}>⚡ {speedMultiplier}x</span>
                 )}
               </p>
-              {/* ✅ Streak Display */}
+              {/* Streak Display */}
               {myStreak > 0 && (
                 <p style={styles.streakBadge}>🔥 {myStreak} streak!</p>
               )}
@@ -662,51 +637,148 @@ const QuizPlayer = ({ sessionId, onClose }) => {
     );
   }
 
-  // Leaderboard and Finished views remain the same as before...
-  // (I'll skip these for brevity, but they should be included from the original file)
+  // Leaderboard View
+  if (currentView === 'leaderboard') {
+    return (
+      <div style={styles.overlay}>
+        <div style={styles.container}>
+          <h2 style={styles.leaderboardTitle}>🏆 Leaderboard</h2>
+          
+          <div style={styles.leaderboardList}>
+            {leaderboard.map((entry, index) => (
+              <div
+                key={index}
+                style={{
+                  ...styles.leaderboardItem,
+                  backgroundColor: entry.userId.toString() === userId ? '#FFF9C4' : '#fff'
+                }}
+              >
+                <div style={styles.rank}>#{entry.rank}</div>
+                <div style={styles.playerInfo}>
+                  <div style={styles.playerScore}>{entry.score} pts</div>
+                  <div style={styles.playerStats}>
+                    {entry.correctAnswers}/{entry.totalAnswers} correct
+                    {entry.streak > 0 && ` • 🔥 ${entry.streak}`}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
 
+          <div style={styles.waitNextMessage}>
+            <div style={styles.waitSpinner}></div>
+            Next question loading...
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Finished View
   if (currentView === 'finished') {
     return (
       <div style={styles.overlay}>
         <div style={styles.container}>
-          <h2>🏁 Quiz Finished</h2>
+          <h2 style={styles.finishedTitle}>🏁 Quiz Completed!</h2>
 
           {/* Tabs */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
-            <button onClick={() => setFinalTab('leaderboard')}>
-              Leaderboard
+          <div style={styles.tabs}>
+            <button
+              onClick={() => setFinalTab('leaderboard')}
+              style={{
+                ...styles.tab,
+                ...(finalTab === 'leaderboard' ? styles.tabActive : {})
+              }}
+            >
+              🏆 Leaderboard
             </button>
-            <button onClick={() => setFinalTab('review')}>
-              My Review
+            <button
+              onClick={() => setFinalTab('review')}
+              style={{
+                ...styles.tab,
+                ...(finalTab === 'review' ? styles.tabActive : {})
+              }}
+            >
+              📊 My Review
             </button>
           </div>
 
-          {/* Leaderboard */}
+          {/* Leaderboard Tab */}
           {finalTab === 'leaderboard' && (
-            <div>
-              {leaderboard.map((p, i) => (
-                <div key={i}>
-                  #{p.rank} - {p.score}
+            <div style={styles.tabContent}>
+              {myRank && (
+                <div style={styles.myRankCard}>
+                  <div style={styles.myRankText}>Your Rank: #{myRank}</div>
+                  <div style={styles.myScoreText}>{myScore} points</div>
                 </div>
-              ))}
+              )}
+
+              <div style={styles.leaderboardList}>
+                {leaderboard.map((entry, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      ...styles.leaderboardItem,
+                      backgroundColor: entry.userId.toString() === userId ? '#FFF9C4' : '#fff'
+                    }}
+                  >
+                    <div style={styles.rank}>#{entry.rank}</div>
+                    <div style={styles.playerInfo}>
+                      <div style={styles.playerScore}>{entry.score} pts</div>
+                      <div style={styles.playerStats}>
+                        {entry.correctAnswers}/{entry.totalAnswers} correct
+                        {entry.streak > 0 && ` • 🔥 ${entry.streak}`}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          {/* Review */}
+          {/* Review Tab */}
           {finalTab === 'review' && (
-            <div>
-              {myAnswers.map((a, i) => (
-                <div key={i}>
-                  <p>{a.questionText}</p>
-                  <p>{a.isCorrect ? '✅ Correct' : '❌ Wrong'}</p>
+            <div style={styles.tabContent}>
+              <div style={styles.reviewSummary}>
+                <div style={styles.summaryCard}>
+                  <div style={styles.summaryLabel}>Total Score</div>
+                  <div style={styles.summaryValue}>{myScore} pts</div>
                 </div>
-              ))}
+                <div style={styles.summaryCard}>
+                  <div style={styles.summaryLabel}>Correct</div>
+                  <div style={styles.summaryValue}>
+                    {myAnswers.filter(a => a.isCorrect).length}/{myAnswers.length}
+                  </div>
+                </div>
+                <div style={styles.summaryCard}>
+                  <div style={styles.summaryLabel}>Best Streak</div>
+                  <div style={styles.summaryValue}>🔥 {myStreak}</div>
+                </div>
+              </div>
+
+              <div style={styles.answersList}>
+                {myAnswers.map((answer, index) => (
+                  <div key={index} style={styles.answerCard}>
+                    <div style={styles.answerHeader}>
+                      <div style={styles.answerNumber}>Q{index + 1}</div>
+                      <div style={{
+                        ...styles.answerResult,
+                        color: answer.isCorrect ? '#4CAF50' : '#F44336'
+                      }}>
+                        {answer.isCorrect ? '✅ Correct' : '❌ Wrong'}
+                      </div>
+                      <div style={styles.answerPoints}>+{answer.points} pts</div>
+                    </div>
+                    <div style={styles.answerQuestion}>{answer.questionText}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
-          <h3>Your Rank: {myRank}</h3>
-
-          <button onClick={onClose}>Exit</button>
+          <button onClick={onClose} style={styles.exitBtn}>
+            Exit Quiz
+          </button>
         </div>
       </div>
     );
@@ -716,7 +788,7 @@ const QuizPlayer = ({ sessionId, onClose }) => {
 };
 
 // ========================================
-// STYLES
+// STYLES (keeping all existing styles)
 // ========================================
 
 const styles = {
@@ -863,7 +935,7 @@ const styles = {
     color: '#25D366'
   },
   
-  // ✅ Fill in Blank Styles
+  // Fill in Blank Styles
   fillInBlankContainer: {
     marginBottom: '25px'
   },
@@ -874,7 +946,8 @@ const styles = {
     border: '3px solid #4F46E5',
     borderRadius: '12px',
     outline: 'none',
-    fontFamily: 'inherit'
+    fontFamily: 'inherit',
+    boxSizing: 'border-box'
   },
   characterCount: {
     marginTop: '8px',
@@ -883,7 +956,7 @@ const styles = {
     textAlign: 'right'
   },
   
-  // ✅ Multiple Select Styles
+  // Multiple Select Styles
   multiSelectHint: {
     fontSize: '14px',
     fontWeight: '600',
@@ -923,7 +996,8 @@ const styles = {
     padding: '18px',
     borderRadius: '12px',
     transition: 'all 0.2s',
-    position: 'relative'
+    position: 'relative',
+    background: 'none'
   },
   optionLetter: {
     width: '45px',
@@ -942,7 +1016,8 @@ const styles = {
     flex: 1,
     fontSize: '17px',
     color: '#333',
-    fontWeight: '500'
+    fontWeight: '500',
+    textAlign: 'left'
   },
   selectedBadge: {
     width: '30px',
@@ -1178,35 +1253,194 @@ const styles = {
     borderTop: '2px solid #4F46E5',
     borderRadius: '50%',
     animation: 'spin 1s linear infinite'
+  },
+
+  // Leaderboard Styles
+  leaderboardTitle: {
+    fontSize: '28px',
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: '20px',
+    textAlign: 'center'
+  },
+  leaderboardList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+    marginBottom: '20px'
+  },
+  leaderboardItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '15px',
+    padding: '15px',
+    borderRadius: '10px',
+    border: '2px solid #e0e0e0'
+  },
+  rank: {
+    fontSize: '24px',
+    fontWeight: '700',
+    color: '#4F46E5',
+    minWidth: '50px'
+  },
+  playerInfo: {
+    flex: 1
+  },
+  playerScore: {
+    fontSize: '18px',
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: '4px'
+  },
+  playerStats: {
+    fontSize: '13px',
+    color: '#666'
+  },
+
+  // Finished View Styles
+  finishedTitle: {
+    fontSize: '32px',
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: '20px',
+    textAlign: 'center'
+  },
+  tabs: {
+    display: 'flex',
+    gap: '10px',
+    marginBottom: '20px',
+    borderBottom: '2px solid #e0e0e0',
+    paddingBottom: '10px'
+  },
+  tab: {
+    flex: 1,
+    padding: '12px',
+    fontSize: '15px',
+    fontWeight: '600',
+    backgroundColor: '#f0f0f0',
+    color: '#666',
+    border: 'none',
+    borderRadius: '8px 8px 0 0',
+    cursor: 'pointer',
+    transition: 'all 0.2s'
+  },
+  tabActive: {
+    backgroundColor: '#4F46E5',
+    color: 'white'
+  },
+  tabContent: {
+    marginBottom: '20px'
+  },
+  myRankCard: {
+    padding: '20px',
+    backgroundColor: '#FFF9C4',
+    borderRadius: '12px',
+    marginBottom: '20px',
+    textAlign: 'center',
+    border: '2px solid #FDD835'
+  },
+  myRankText: {
+    fontSize: '18px',
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: '8px'
+  },
+  myScoreText: {
+    fontSize: '24px',
+    fontWeight: '700',
+    color: '#4F46E5'
+  },
+  reviewSummary: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '15px',
+    marginBottom: '20px'
+  },
+  summaryCard: {
+    padding: '15px',
+    backgroundColor: '#f9f9f9',
+    borderRadius: '10px',
+    textAlign: 'center',
+    border: '2px solid #e0e0e0'
+  },
+  summaryLabel: {
+    fontSize: '12px',
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: '8px'
+  },
+  summaryValue: {
+    fontSize: '20px',
+    fontWeight: '700',
+    color: '#4F46E5'
+  },
+  answersList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px'
+  },
+  answerCard: {
+    padding: '15px',
+    backgroundColor: '#fff',
+    borderRadius: '10px',
+    border: '2px solid #e0e0e0'
+  },
+  answerHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '10px'
+  },
+  answerNumber: {
+    fontSize: '14px',
+    fontWeight: '700',
+    color: '#4F46E5'
+  },
+  answerResult: {
+    fontSize: '14px',
+    fontWeight: '700'
+  },
+  answerPoints: {
+    fontSize: '14px',
+    fontWeight: '700',
+    color: '#666'
+  },
+  answerQuestion: {
+    fontSize: '14px',
+    color: '#333',
+    lineHeight: '1.4'
+  },
+  exitBtn: {
+    width: '100%',
+    padding: '18px',
+    fontSize: '18px',
+    fontWeight: '700',
+    backgroundColor: '#4F46E5',
+    color: 'white',
+    border: 'none',
+    borderRadius: '12px',
+    cursor: 'pointer',
+    transition: 'all 0.2s'
   }
 };
 
 // Add keyframe animations
-const styleSheet = document.styleSheets[0];
-if (styleSheet) {
-  try {
-    styleSheet.insertRule(`
-      @keyframes spin {
-        to { transform: rotate(360deg); }
-      }
-    `, styleSheet.cssRules.length);
-
-    styleSheet.insertRule(`
-      @keyframes pulse {
-        0%, 100% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(1.05); opacity: 0.8; }
-      }
-    `, styleSheet.cssRules.length);
-
-    styleSheet.insertRule(`
-      @keyframes bounce {
-        0%, 100% { transform: translateY(0); }
-        50% { transform: translateY(-20px); }
-      }
-    `, styleSheet.cssRules.length);
-  } catch (e) {
-    console.log('Animations already defined');
-  }
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = `
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.05); opacity: 0.8; }
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-20px); }
+    }
+  `;
+  document.head.appendChild(styleSheet);
 }
 
 export default QuizPlayer;
