@@ -204,12 +204,11 @@ const ChatArea = ({
     }
 
     const totalVotes = message.pollOptions.reduce((sum, opt) => sum + (opt.votes?.length || 0), 0);
-    const userHasVoted = message.pollOptions.some(opt => 
-      opt.votes?.some(voterId => String(voterId) === String(currentUserId))
-    );
+    
     const userVoteIndex = message.pollOptions.findIndex(opt =>
       opt.votes?.some(voterId => String(voterId) === String(currentUserId))
     );
+     const userHasVoted = userVoteIndex !== -1;
 
     return (
       <div style={styles.pollContainer}>
@@ -290,7 +289,7 @@ const ChatArea = ({
             </div>
             <button
               
-              onClick={() => handleJoinQuiz(sessionId)}
+              onClick={() => sessionId && handleJoinQuiz(sessionId)}
 
               style={styles.joinQuizBtn}
             >

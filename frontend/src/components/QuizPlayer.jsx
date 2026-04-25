@@ -13,7 +13,24 @@ const QuizPlayer = ({ sessionId, onClose }) => {
   
   // Answer state
   const [selectedAnswer, setSelectedAnswer] = useState(null);
+  <input
+    type="radio"
+    name="option"
+    checked={selectedAnswer === index}
+    onChange={() => setSelectedAnswer(index)}
+  />
+  socket.emit('quiz:submitAnswer', {
+    sessionId,
+    answer: selectedAnswer || selectedAnswers || textAnswer
+  });
   const [selectedAnswers, setSelectedAnswers] = useState([]); // For multiple_select
+  const handleMultiSelect = (index) => {
+    setSelectedAnswers(prev =>
+      prev.includes(index)
+        ? prev.filter(i => i !== index)
+        : [...prev, index]
+    );
+  };
   const [textAnswer, setTextAnswer] = useState(''); // For fill_in_blank
   const [hasAnswered, setHasAnswered] = useState(false);
   const [answerSummary, setAnswerSummary] = useState(null);
@@ -30,6 +47,14 @@ const QuizPlayer = ({ sessionId, onClose }) => {
   // Leaderboard state
   const [leaderboard, setLeaderboard] = useState([]);
   const [myRank, setMyRank] = useState(null);
+
+  const [textAnswer, setTextAnswer] = useState("");
+  <input
+    type="text"
+    value={textAnswer}
+    onChange={(e) => setTextAnswer(e.target.value)}
+    placeholder="Type your answer..."
+  />
   
   // Final view tabs
   const [finalTab, setFinalTab] = useState('leaderboard');
