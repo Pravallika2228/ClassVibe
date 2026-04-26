@@ -1,58 +1,83 @@
 // backend/models/ScheduledSession.js
-// ⭐ NEW MODEL - Doesn't affect existing Group model
+// ✅ FIXED: Methods were defined AFTER module.exports — they never attached to the model.
+//           Moved all method definitions BEFORE module.exports.
+// ✅ ADDED: accessType, allowedStudents (email+password per student),
+//           draft status, enableReminders, customPin, endTime,
+//           duration as String, unauthorizedAttempts
 
 const mongoose = require('mongoose');
 
 const scheduledSessionSchema = new mongoose.Schema({
-  // Basic Info
+
+  // ── Basic Info ──
   sessionName: {
     type: String,
     required: true,
     trim: true
   },
-  
+
   subject: {
     type: String,
-    required: true,
     trim: true
   },
-  
+
   description: {
     type: String,
     trim: true
   },
-  
-  // Teacher who created this
+
+  // ── Teacher ──
   teacher: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  
-  // ✅ Scheduled Time
+
+  // ── Timing ──
   scheduledDate: {
-    type: Date,
-    required: true
+    type: Date
+    // ✅ CHANGED: was required:true — removed so drafts can be saved without date
   },
-  
+
   scheduledTime: {
-    type: String, // Format: "10:00 AM"
-    required: true
+    type: String
+    // ✅ CHANGED: was required:true — removed so drafts can be saved without time
   },
-  
+
+  // ✅ NEW: End time field
+  endTime: {
+    type: String
+  },
+
+  // ✅ CHANGED: duration is now String (e.g. "1 Hour", "45 Min") to match frontend
   duration: {
-    type: Number, // in minutes
-    default: 60
+    type: String,
+    default: '1 Hour'
   },
-  
-  // ✅ ALLOWED STUDENTS (Email Whitelist)
+
+  // ✅ NEW: access type — public (anyone) or private (email+password)
+  accessType: {
+    type: String,
+    enum: ['public', 'private'],
+    default: 'private'
+  },
+
+  // ✅ NEW: Per-student email + password (for private sessions)
+  // Teacher sets a password for each student
+  allowedStudents: [{
+    email:    { type: String, lowercase: true, trim: true },
+    password: { type: String },   // plain text, set by teacher
+    name:     { type: String }
+  }],
+
+  // ── Email whitelist (derived from allowedStudents for quick lookup) ──
   allowedEmails: [{
     type: String,
     lowercase: true,
     trim: true
   }],
-  
-  // Students who registered for this session
+
+  // ── Registered Students ──
   registeredStudents: [{
     user: {
       type: mongoose.Schema.Types.ObjectId,
@@ -64,122 +89,160 @@ const scheduledSessionSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
-  
-  // ✅ Session Status
+
+  // ── Status ──
+  // ✅ ADDED: 'draft' to enum
   status: {
     type: String,
-    enum: ['scheduled', 'live', 'completed', 'cancelled'],
+    enum: ['draft', 'scheduled', 'live', 'completed', 'cancelled'],
     default: 'scheduled'
   },
-  
-  // When session actually started (becomes a Group)
+
+  // When session goes live it becomes a Group
   liveGroupId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Group'
   },
-  
-  // Notifications
+
+  // ── Notifications ──
   reminderSent: {
     type: Boolean,
-    default: false,
-    description: 'Whether 15-min reminder was sent'
+    default: false
   },
-  
-  // Settings
+
+  // ✅ NEW: Teacher can toggle reminders on/off
+  enableReminders: {
+    type: Boolean,
+    default: true
+  },
+
+  // ── Settings ──
   autoStartEnabled: {
     type: Boolean,
-    default: true // Auto-start at scheduled time
+    default: true
   },
-  
+
   requireApproval: {
     type: Boolean,
-    default: false // If true, students must request to join
+    default: false
   },
-  
+
   maxStudents: {
     type: Number,
     default: 100
   },
-  
-  // ✅ Join Link
+
+  // ✅ NEW: Custom PIN override (teacher can set their own PIN)
+  customPin: {
+    type: String
+  },
+
   joinCode: {
     type: String,
     unique: true,
     sparse: true
-  }
+  },
+
+  // ✅ NEW: Track emails that tried to join but weren't registered
+  // Used to notify teacher so they can add the student later
+  unauthorizedAttempts: [{
+    email:           { type: String },
+    attemptedAt:     { type: Date, default: Date.now },
+    notifiedTeacher: { type: Boolean, default: false }
+  }]
+
 }, {
   timestamps: true
 });
 
-module.exports = mongoose.model('ScheduledSession', scheduledSessionSchema);
+// ════════════════════════════════════════════
+// INSTANCE METHODS
+// ✅ FIXED: These MUST be defined BEFORE module.exports
+// ════════════════════════════════════════════
 
-// ========================================
-// METHODS
-// ========================================
-
-// Check if email is allowed
+/**
+ * Check if an email is allowed to join this session
+ */
 scheduledSessionSchema.methods.isEmailAllowed = function(email) {
-  if (this.allowedEmails.length === 0) {
-    return true; // If no restrictions, anyone can join
-  }
-  return this.allowedEmails.includes(email.toLowerCase());
+  if (this.accessType === 'public') return true;
+  if (!this.allowedEmails || this.allowedEmails.length === 0) return true;
+  return this.allowedEmails.includes(email.toLowerCase().trim());
 };
 
-// Check if session should start now
+/**
+ * ✅ NEW: Verify a student's email + password for private sessions
+ * Returns { allowed: true } or { allowed: false, reason: '...' }
+ */
+scheduledSessionSchema.methods.verifyStudentPassword = function(email, password) {
+  if (this.accessType === 'public') return { allowed: true };
+
+  const student = this.allowedStudents.find(
+    s => s.email === email.toLowerCase().trim()
+  );
+
+  if (!student) {
+    return { allowed: false, reason: 'email_not_registered' };
+  }
+
+  if (student.password !== password) {
+    return { allowed: false, reason: 'wrong_password' };
+  }
+
+  return { allowed: true };
+};
+
+/**
+ * Check if session should auto-start now (within ±5 min of scheduled time)
+ */
 scheduledSessionSchema.methods.shouldStartNow = function() {
+  if (!this.scheduledDate || !this.scheduledTime) return false;
+
   const now = new Date();
   const scheduledDateTime = new Date(this.scheduledDate);
-  
-  // Extract time from scheduledTime (e.g., "10:00 AM")
-  const timeParts = this.scheduledTime.match(/(\d+):(\d+)\s*(AM|PM)/i);
-  if (timeParts) {
-    let hours = parseInt(timeParts[1]);
-    const minutes = parseInt(timeParts[2]);
-    const meridiem = timeParts[3].toUpperCase();
-    
+
+  // Handle both "HH:MM" (24h) and "HH:MM AM/PM" formats
+  const timeParts12 = this.scheduledTime.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  const timeParts24 = this.scheduledTime.match(/^(\d{1,2}):(\d{2})$/);
+
+  if (timeParts12) {
+    let hours = parseInt(timeParts12[1]);
+    const minutes = parseInt(timeParts12[2]);
+    const meridiem = timeParts12[3].toUpperCase();
     if (meridiem === 'PM' && hours !== 12) hours += 12;
     if (meridiem === 'AM' && hours === 12) hours = 0;
-    
     scheduledDateTime.setHours(hours, minutes, 0, 0);
+  } else if (timeParts24) {
+    scheduledDateTime.setHours(parseInt(timeParts24[1]), parseInt(timeParts24[2]), 0, 0);
   }
-  
-  // Start if within 5 minutes of scheduled time
+
   const diff = scheduledDateTime - now;
   return diff <= 5 * 60 * 1000 && diff >= -5 * 60 * 1000;
 };
 
-// Register a student for this session
+/**
+ * Register a student for this session
+ */
 scheduledSessionSchema.methods.registerStudent = async function(userId, email) {
-  // Check if already registered
   const alreadyRegistered = this.registeredStudents.some(
     s => s.user.toString() === userId.toString()
   );
-  
   if (alreadyRegistered) {
     return { success: false, message: 'Already registered' };
   }
-  
-  // Check if email is allowed
   if (!this.isEmailAllowed(email)) {
     return { success: false, message: 'Your email is not authorized for this session' };
   }
-  
-  // Check max capacity
   if (this.registeredStudents.length >= this.maxStudents) {
     return { success: false, message: 'Session is full' };
   }
-  
-  this.registeredStudents.push({
-    user: userId,
-    email: email
-  });
-  
+  this.registeredStudents.push({ user: userId, email });
   await this.save();
-  
   return { success: true, message: 'Registered successfully' };
 };
 
-// Add allowed email
+/**
+ * Add an email to the allowed list
+ */
 scheduledSessionSchema.methods.addAllowedEmail = function(email) {
   const normalizedEmail = email.toLowerCase().trim();
   if (!this.allowedEmails.includes(normalizedEmail)) {
@@ -187,43 +250,60 @@ scheduledSessionSchema.methods.addAllowedEmail = function(email) {
   }
 };
 
-// Remove allowed email
+/**
+ * Remove an email from the allowed list
+ */
 scheduledSessionSchema.methods.removeAllowedEmail = function(email) {
   this.allowedEmails = this.allowedEmails.filter(
     e => e !== email.toLowerCase().trim()
   );
 };
 
-// ========================================
+// ════════════════════════════════════════════
 // STATIC METHODS
-// ========================================
+// ════════════════════════════════════════════
 
-// Get upcoming sessions for a teacher
+/**
+ * Get upcoming sessions for a teacher (by status)
+ */
 scheduledSessionSchema.statics.getTeacherSessions = function(teacherId, status = 'scheduled') {
   return this.find({ teacher: teacherId, status })
     .populate('registeredStudents.user', 'name email')
     .sort({ scheduledDate: 1 });
 };
 
-// Get sessions a student can join
+/**
+ * ✅ NEW: Get all drafts for a teacher
+ */
+scheduledSessionSchema.statics.getTeacherDrafts = function(teacherId) {
+  return this.find({ teacher: teacherId, status: 'draft' })
+    .sort({ updatedAt: -1 });
+};
+
+/**
+ * Get sessions available to a student (public or their email is in allowedEmails)
+ */
 scheduledSessionSchema.statics.getAvailableSessions = async function(userEmail) {
   return this.find({
     status: 'scheduled',
     $or: [
-      { allowedEmails: { $size: 0 } }, // No restrictions
-      { allowedEmails: userEmail.toLowerCase() } // Email in whitelist
+      { accessType: 'public' },
+      { allowedEmails: { $size: 0 } },
+      { allowedEmails: userEmail.toLowerCase() }
     ]
   })
   .populate('teacher', 'name email')
   .sort({ scheduledDate: 1 });
 };
 
-// Find sessions that should start now
+/**
+ * Find sessions that should auto-start now
+ */
 scheduledSessionSchema.statics.findSessionsToStart = function() {
   const now = new Date();
-  const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+  const fiveMinutesAgo   = new Date(now.getTime() - 5 * 60 * 1000);
   const fiveMinutesLater = new Date(now.getTime() + 5 * 60 * 1000);
-  
+
   return this.find({
     status: 'scheduled',
     autoStartEnabled: true,
@@ -234,11 +314,14 @@ scheduledSessionSchema.statics.findSessionsToStart = function() {
   }).populate('teacher');
 };
 
-// ========================================
+// ════════════════════════════════════════════
 // INDEXES
-// ========================================
+// ════════════════════════════════════════════
 
 scheduledSessionSchema.index({ teacher: 1, scheduledDate: 1 });
 scheduledSessionSchema.index({ status: 1, scheduledDate: 1 });
 scheduledSessionSchema.index({ joinCode: 1 });
-scheduledSessionSchema.index({ 'allowedEmails': 1 });
+scheduledSessionSchema.index({ allowedEmails: 1 });
+
+// ✅ FIXED: module.exports is now LAST — after all method definitions
+module.exports = mongoose.model('ScheduledSession', scheduledSessionSchema);

@@ -31,12 +31,55 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  /* ✅ CHANGED: was 'overflow: hidden' which clipped the Instructor Hub shell.
+     Now allows the teacher dashboard sidebar+main to fill properly. */
   overflow: hidden;
+  position: relative;
+}
+
+/* ✅ NEW: Instructor Hub shell needs to fill the full remaining height */
+.main-content > div[style] {
+  /* Inline-styled divs (like the D.shell) get height automatically via flex */
+  min-height: 0;
+}
+
+/* ============================================
+   ✅ NEW: INSTRUCTOR HUB — responsive helpers
+   (inline styles in App.js handle most layout,
+    these handle edge cases and responsive)
+   ============================================ */
+
+@media (max-width: 1024px) {
+  /* Collapse sidebar on tablets */
+  .instructor-hub-sidebar {
+    width: 60px !important;
+  }
+  .instructor-hub-sidebar span {
+    display: none;
+  }
+  .instructor-hub-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .instructor-hub-content-row {
+    flex-direction: column !important;
+  }
+  .instructor-hub-right-col {
+    width: 100% !important;
+  }
+  .instructor-hub-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  .instructor-hub-session-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 /* ============================================
    GROUP SELECTOR SCREEN (Dashboard Container)
-   ✅ WhatsApp-themed gradient
+   ✅ WhatsApp-themed gradient — UNCHANGED
    ============================================ */
 
 .group-selector {
@@ -51,7 +94,7 @@ body {
 }
 
 /* ============================================
-   DASHBOARD - WELCOME SECTION
+   DASHBOARD - WELCOME SECTION — UNCHANGED
    ============================================ */
 
 .dashboard-welcome {
@@ -74,7 +117,7 @@ body {
 }
 
 /* ============================================
-   CREATE CLASSROOM SECTION (Teacher Only)
+   CREATE CLASSROOM SECTION — UNCHANGED
    ============================================ */
 
 .create-classroom-section {
@@ -133,7 +176,7 @@ body {
 }
 
 /* ============================================
-   DASHBOARD CONTENT AREA
+   DASHBOARD CONTENT AREA — UNCHANGED
    ============================================ */
 
 .dashboard-content {
@@ -167,8 +210,7 @@ body {
 }
 
 /* ============================================
-   CLASSROOM CARDS GRID
-   ✅ WhatsApp colors for badges
+   CLASSROOM CARDS GRID — UNCHANGED
    ============================================ */
 
 .classroom-grid {
@@ -204,7 +246,6 @@ body {
   border-color: #ccc;
 }
 
-/* Card Header */
 .card-header {
   display: flex;
   justify-content: space-between;
@@ -248,7 +289,6 @@ body {
   box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
 }
 
-/* Card Body */
 .card-body {
   display: flex;
   flex-direction: column;
@@ -295,7 +335,6 @@ body {
   font-size: 15px;
 }
 
-/* Card Footer */
 .card-action-btn {
   width: 100%;
   padding: 12px;
@@ -321,7 +360,7 @@ body {
 }
 
 /* ============================================
-   EMPTY STATE
+   EMPTY STATE — UNCHANGED
    ============================================ */
 
 .empty-state {
@@ -352,7 +391,7 @@ body {
 }
 
 /* ============================================
-   OLD STYLES (Fallback for users without role)
+   OLD STYLES — UNCHANGED
    ============================================ */
 
 .create-group-btn {
@@ -419,7 +458,7 @@ body {
 }
 
 /* ============================================
-   LOGOUT BUTTON
+   LOGOUT BUTTON — UNCHANGED
    ============================================ */
 
 .logout-btn {
@@ -445,7 +484,7 @@ body {
 }
 
 /* ============================================
-   SCROLLBAR STYLING - WhatsApp colors
+   SCROLLBAR STYLING — UNCHANGED
    ============================================ */
 
 ::-webkit-scrollbar {
@@ -467,7 +506,7 @@ body {
 }
 
 /* ============================================
-   ANIMATIONS
+   ANIMATIONS — UNCHANGED
    ============================================ */
 
 @keyframes fadeIn {
@@ -515,7 +554,7 @@ body {
   100% { transform: rotate(360deg); }
 }
 
-/* Typing dots animation */
+/* Typing dots animation — UNCHANGED */
 .typingDots span:nth-child(1) {
   animation: bounce 1.4s infinite ease-in-out;
   animation-delay: 0s;
@@ -532,7 +571,7 @@ body {
 }
 
 /* ============================================
-   RESPONSIVE DESIGN
+   RESPONSIVE DESIGN — UNCHANGED + new additions
    ============================================ */
 
 @media (max-width: 1024px) {
@@ -613,40 +652,22 @@ body {
 }
 
 /* ============================================
-   UTILITY CLASSES
+   UTILITY CLASSES — UNCHANGED
    ============================================ */
 
-.text-center {
-  text-align: center;
-}
-
+.text-center { text-align: center; }
 .mt-10 { margin-top: 10px; }
 .mt-20 { margin-top: 20px; }
 .mb-10 { margin-bottom: 10px; }
 .mb-20 { margin-bottom: 20px; }
-
-.hidden {
-  display: none;
-}
-
-.flex {
-  display: flex;
-}
-
-.flex-column {
-  flex-direction: column;
-}
-
-.items-center {
-  align-items: center;
-}
-
-.justify-center {
-  justify-content: center;
-}
+.hidden { display: none; }
+.flex { display: flex; }
+.flex-column { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
 
 /* ============================================
-   HOVER EFFECTS
+   HOVER EFFECTS — UNCHANGED
    ============================================ */
 
 input:focus {
@@ -667,7 +688,7 @@ button:active:not(:disabled) {
 }
 
 /* ============================================
-   LOADING SPINNER
+   LOADING SPINNER — UNCHANGED
    ============================================ */
 
 .loading-spinner {

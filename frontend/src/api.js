@@ -12,7 +12,7 @@ const api = axios.create({
   withCredentials: true // ✅ REQUIRED for CORS + auth
 });
 
-// Add token to every request
+// Add token to every request — UNCHANGED
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -26,7 +26,7 @@ api.interceptors.request.use(
   }
 );
 
-// Add this AFTER the request interceptor in api.js
+// Response interceptor — UNCHANGED
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -34,23 +34,23 @@ api.interceptors.response.use(
       console.warn('Token expired or invalid - clearing session');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.reload(); // Force re-login
+      window.location.reload();
     }
     return Promise.reject(error);
   }
 );
 
 // ============================================
-// AUTH API CALLS
+// AUTH API CALLS — UNCHANGED
 // ============================================
 export const register = async (email, password, name = '', role = 'student') => {
   try {
     const response = await api.post('/auth/register', {
       email,
       password,
-      name: name || email.split('@')[0],  // ⭐ Use email as fallback name
+      name: name || email.split('@')[0],
       username: email.split('@')[0],
-      role  // ⭐ This will now be 'teacher' when called from TeacherLogin
+      role
     });
     return response.data;
   } catch (error) {
@@ -73,7 +73,7 @@ export const login = async (email, password) => {
 };
 
 // ============================================
-// SESSION/GROUP API CALLS
+// SESSION/GROUP API CALLS — UNCHANGED
 // ============================================
 export const createGroup = async (groupName) => {
   try {
@@ -138,7 +138,7 @@ export const getMessages = async (groupId) => {
 };
 
 // ============================================
-// FILE UPLOAD
+// FILE UPLOAD — UNCHANGED
 // ============================================
 export const uploadFile = async (file) => {
   try {
@@ -158,6 +158,145 @@ export const uploadFile = async (file) => {
     return data;
   } catch (error) {
     console.error('Upload error:', error);
+    throw error;
+  }
+};
+
+// ============================================
+// ✅ NEW: SCHEDULE API CALLS
+// These are convenience wrappers used by
+// ScheduleSession.jsx and the Instructor Hub.
+// ScheduleSession.jsx also uses fetch() directly
+// for cases that need FormData — both work fine.
+// ============================================
+
+/**
+ * Create a scheduled session
+ */
+export const createScheduledSession = async (payload) => {
+  try {
+    const response = await api.post('/schedule/create', payload);
+    return response.data;
+  } catch (error) {
+    console.error('Create scheduled session error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Save a draft session
+ */
+export const saveSessionDraft = async (payload) => {
+  try {
+    const response = await api.post('/schedule/draft', payload);
+    return response.data;
+  } catch (error) {
+    console.error('Save draft error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all drafts for the current teacher
+ */
+export const getSessionDrafts = async () => {
+  try {
+    const response = await api.get('/schedule/drafts');
+    return response.data;
+  } catch (error) {
+    console.error('Get drafts error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a draft
+ */
+export const deleteSessionDraft = async (draftId) => {
+  try {
+    const response = await api.delete(`/schedule/draft/${draftId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Delete draft error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get teacher's scheduled sessions
+ * @param {string} status - 'scheduled' | 'live' | 'completed' | 'all'
+ */
+export const getMySessions = async (status = 'all') => {
+  try {
+    const response = await api.get(`/schedule/my-sessions?status=${status}`);
+    return response.data;
+  } catch (error) {
+    console.error('Get my sessions error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Start a scheduled session (converts it to a live Group)
+ */
+export const startScheduledSession = async (sessionId) => {
+  try {
+    const response = await api.post(`/schedule/${sessionId}/start`);
+    return response.data;
+  } catch (error) {
+    console.error('Start session error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Cancel a scheduled session
+ */
+export const cancelScheduledSession = async (sessionId) => {
+  try {
+    const response = await api.post(`/schedule/${sessionId}/cancel`);
+    return response.data;
+  } catch (error) {
+    console.error('Cancel session error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Verify student access to a private session (email + password)
+ */
+export const verifySessionAccess = async (sessionId, password) => {
+  try {
+    const response = await api.post(`/schedule/${sessionId}/verify-access`, { password });
+    return response.data;
+  } catch (error) {
+    console.error('Verify access error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get available sessions for student
+ */
+export const getAvailableSessions = async () => {
+  try {
+    const response = await api.get('/schedule/available');
+    return response.data;
+  } catch (error) {
+    console.error('Get available sessions error:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get unauthorized join attempts for a session (teacher use)
+ */
+export const getUnauthorizedAttempts = async (sessionId) => {
+  try {
+    const response = await api.get(`/schedule/${sessionId}/unauthorized-attempts`);
+    return response.data;
+  } catch (error) {
+    console.error('Get unauthorized attempts error:', error);
     throw error;
   }
 };
