@@ -1,22 +1,27 @@
 // frontend/src/pages/TeacherLogin.jsx
 import React, { useState } from "react";
 import "./TeacherLogin.css";
-import { register, login } from "../api"; // ✅ CHANGED: removed createGroup — no auto-classroom
+import { register, login } from "../api";
 import socket from "../socket";
 
 export default function TeacherLogin({ onAuthSuccess, onBack }) {
-  // ✅ REMOVED: name state — was only used to create classroom name
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState(""); // ✅ NEW: username field for sign up
+  const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
 
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [loading, setLoading]         = useState(false);
+  const [message, setMessage]         = useState("");
   const [messageType, setMessageType] = useState("error");
   const [isRegisterMode, setIsRegisterMode] = useState(true);
 
   const isValidEmail = (value) => {
     const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return re.test(String(value).toLowerCase());
+  };
+
+  const isValidUsername = (value) => {
+    // Only letters, numbers, underscores, 3-20 chars
+    return /^[a-zA-Z0-9_]{3,20}$/.test(value);
   };
 
   const parseJwt = (token) => {
@@ -30,20 +35,18 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
           .join("")
       );
       return JSON.parse(json);
-    } catch (e) {
-      return null;
-    }
+    } catch (e) { return null; }
   };
 
   const extractAuth = (resp) => {
     if (!resp) return {};
     const maybe = resp.data ?? resp;
     const token = maybe.token ?? maybe.accessToken ?? null;
-    const user = maybe.user ?? maybe;
+    const user  = maybe.user ?? maybe;
     return { token, user };
   };
 
-  // ✅ Identical to original — socket connect logic unchanged
+  // Identical to original
   const finishAuth = async (userObj, token) => {
     if (token) localStorage.setItem("token", token);
     if (userObj) localStorage.setItem("user", JSON.stringify(userObj));
@@ -62,39 +65,19 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
     try {
       socket.connect();
       if (token) socket.emit("authenticate", token);
-    } catch (e) {
-      console.warn("Socket connect/emit issue:", e?.message ?? e);
-    }
+    } catch (e) { console.warn("Socket connect/emit issue:", e?.message ?? e); }
   };
 
-  // ✅ Identical to original
+  // Identical to original
   const waitForSocketAuth = (timeoutMs = 3000) =>
     new Promise((resolve) => {
       let resolved = false;
-      const onAuth = () => {
-        if (resolved) return;
-        resolved = true;
-        cleanup();
-        resolve({ ok: true });
-      };
-      const onError = (data) => {
-        if (resolved) return;
-        resolved = true;
-        cleanup();
-        resolve({ ok: false, data });
-      };
-      const cleanup = () => {
-        socket.off("authenticated", onAuth);
-        socket.off("authError", onError);
-      };
+      const onAuth = () => { if (resolved) return; resolved = true; cleanup(); resolve({ ok: true }); };
+      const onError = (data) => { if (resolved) return; resolved = true; cleanup(); resolve({ ok: false, data }); };
+      const cleanup = () => { socket.off("authenticated", onAuth); socket.off("authError", onError); };
       socket.once("authenticated", onAuth);
       socket.once("authError", onError);
-      setTimeout(() => {
-        if (resolved) return;
-        resolved = true;
-        cleanup();
-        resolve({ ok: true, timeout: true });
-      }, timeoutMs);
+      setTimeout(() => { if (resolved) return; resolved = true; cleanup(); resolve({ ok: true, timeout: true }); }, timeoutMs);
     });
 
   const handleSubmit = async (e) => {
@@ -102,8 +85,14 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
     setMessage("");
     setMessageType("error");
 
-    // --- REGISTER ---
+    // ── REGISTER ──
     if (isRegisterMode) {
+      // ✅ NEW: validate username
+      if (!username.trim()) { setMessage("Enter a username"); return; }
+      if (!isValidUsername(username.trim())) {
+        setMessage("Username must be 3–20 characters (letters, numbers, underscores only)");
+        return;
+      }
       if (!email.trim()) { setMessage("Enter email id"); return; }
       if (!isValidEmail(email.trim())) { setMessage("Invalid email id"); return; }
       if (!password.trim() || password.length < 6) {
@@ -112,43 +101,37 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
       }
       setLoading(true);
       try {
-        await register(email.trim(), password, email.split('@')[0], 'teacher');
+        // ✅ CHANGED: pass username explicitly instead of auto-generating from email
+        await register(email.trim(), password, username.trim(), 'teacher');
         setMessageType("success");
         setMessage("Account created. Please sign in.");
         setIsRegisterMode(false);
+        setUsername(""); // clear username after success
       } catch (err) {
         console.error("Register error:", err);
         const serverMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || "Registration failed";
         setMessage(serverMsg);
         setMessageType("error");
-      } finally {
-        setLoading(false);
-      }
+      } finally { setLoading(false); }
       return;
     }
 
-    // --- SIGN IN ---
-    // ✅ CHANGED: Removed name requirement, removed createGroup call
+    // ── SIGN IN ──
     if (!email.trim() || !password.trim()) {
       setMessage("Please fill Email and Password.");
       return;
     }
-    if (!isValidEmail(email.trim())) {
-      setMessage("Invalid email id");
-      return;
-    }
+    if (!isValidEmail(email.trim())) { setMessage("Invalid email id"); return; }
 
     setLoading(true);
     try {
       const loginResp = await login(email.trim(), password);
       let { token, user } = extractAuth(loginResp);
-
       if (!token) throw new Error("Authentication failed (no token).");
 
       await finishAuth(user, token);
       await waitForSocketAuth(3000);
 
-      // ✅ CHANGED: No createGroup here — teacher goes straight to dashboard
       setMessageType("success");
       setMessage("Signed in! Loading dashboard...");
 
@@ -156,33 +139,27 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
         const savedUser = JSON.parse(localStorage.getItem("user") || "null");
         onAuthSuccess && onAuthSuccess(savedUser ?? user, token);
       }, 400);
-
     } catch (err) {
       console.error("Sign-in error:", err);
       const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || "Failed to sign in";
       setMessage(errMsg);
       setMessageType("error");
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const toggleMode = () => {
     setIsRegisterMode((s) => !s);
     setMessage("");
     setMessageType("error");
+    setUsername("");
   };
 
   return (
     <div className="teacher-page">
       <header className="teacher-header">
-        <h2>
-          ClassVibe <span className="owner">- sai</span>
-        </h2>
+        <h2>ClassVibe <span className="owner">- sai</span></h2>
         <div className="header-actions">
-          <button className="link-btn" onClick={() => onBack && onBack()}>
-            Back to Home
-          </button>
+          <button className="link-btn" onClick={() => onBack && onBack()}>Back to Home</button>
         </div>
       </header>
 
@@ -204,7 +181,20 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
             <p className="hint">Enter your credentials</p>
 
             <form onSubmit={handleSubmit}>
-              {/* ✅ REMOVED: Teacher Name field — no longer needed since we don't auto-create classroom */}
+
+              {/* ✅ NEW: Username — only shown in Register mode */}
+              {isRegisterMode && (
+                <>
+                  <label>Username</label>
+                  <input
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="e.g., mrsmith_teacher"
+                    required
+                  />
+                </>
+              )}
 
               <label>Email</label>
               <input
@@ -224,13 +214,8 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
                 required
               />
 
-              {/* ✅ CHANGED: Button no longer says "Sign In & Create Classroom" */}
               <button type="submit" className="create-btn" disabled={loading}>
-                {loading
-                  ? "Please wait..."
-                  : isRegisterMode
-                  ? "Sign Up"
-                  : "Sign In"}
+                {loading ? "Please wait..." : isRegisterMode ? "Sign Up" : "Sign In"}
               </button>
             </form>
 
@@ -242,10 +227,7 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
             </div>
 
             {message && (
-              <div
-                className={`msg ${messageType === "success" ? "success" : "error"}`}
-                role="status"
-              >
+              <div className={`msg ${messageType === "success" ? "success" : "error"}`} role="status">
                 {message}
               </div>
             )}
@@ -254,7 +236,6 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
       </main>
 
       <footer className="teacher-footer">
-        {/* ✅ Fixed broken image paths from original */}
         <div className="social-links">
           <img src="/css/instagram.png" alt="ig" />
           <img src="/css/linkedin.png" alt="in" />
