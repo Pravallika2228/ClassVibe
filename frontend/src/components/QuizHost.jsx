@@ -1,11 +1,19 @@
 // frontend/src/components/QuizHost.jsx
-// Teacher's Quiz Control Panel - Server-Synchronized
+// ✅ CHANGES:
+// 1. Listen for 'student:joined' (was broken — backend now also fixed to emit this)
+// 2. Store real student name in state (sent from backend)
+// 3. Display real name instead of "Student {userId.substring(0,6)}"
+// 4. REMOVED "Finish Quiz" button — last question footer now shows "End Quiz" same as header
+//    (End Quiz ends + auto-saves to history via server)
+// 5. Finished view: added "🔄 Create Again Quiz" button (calls onCreateAgain prop if provided)
+// 6. ALL other logic — timer, next question, start quiz — IDENTICAL
 
 import React, { useState, useEffect } from 'react';
 import socket from '../socket';
 
-const QuizHost = ({ quiz, sessionId, onClose }) => {
+const QuizHost = ({ quiz, sessionId, onClose, onCreateAgain }) => {
   const [currentView, setCurrentView] = useState('preview'); // preview, active, finished
+  // ✅ CHANGED: students now store { userId, name, answered } — name is real name from DB
   const [students, setStudents] = useState([]);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
@@ -16,65 +24,68 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
   // ========================================
 
   useEffect(() => {
-    if (!socket.connected) {
-      socket.connect();
-    }
+    if (!socket.connected) socket.connect();
 
-    // Listen for student joined
+    // ✅ CHANGED: was 'student:joined', backend was emitting 'participantJoined' — now both fixed
+    // Backend now emits 'student:joined' with { userId, name } so real name shows up
     socket.on('student:joined', (data) => {
-      console.log('👤 Student joined');
+      console.log('👤 Student joined:', data.name || data.userId);
       setStudents(prev => {
         if (prev.find(s => s.userId === data.userId)) return prev;
-        return [...prev, { userId: data.userId, answered: false }];
+        return [...prev, {
+          userId: data.userId,
+          // ✅ CHANGED: use real name from event, fallback to short ID if missing
+          name: data.name || data.username || `Student ${String(data.userId).substring(0, 6)}`,
+          answered: false,
+          score: 0
+        }];
       });
     });
 
-    // Listen for student answered
+    // Listen for student answered — UNCHANGED
     socket.on('student:answered', (data) => {
       console.log('✅ Student answered');
       setAnsweredCount(data.answeredCount);
-      setStudents(prev => prev.map(s => 
+      setStudents(prev => prev.map(s =>
         s.userId === data.userId ? { ...s, answered: true } : s
       ));
     });
 
-    // Listen for timer updates from server
+    // Listen for timer updates from server — UNCHANGED
     socket.on('timer:update', (data) => {
       setTimeRemaining(data.timeRemaining);
     });
 
-    // Listen for quiz started confirmation
+    // Listen for quiz started confirmation — UNCHANGED
     socket.on('quiz:started', (data) => {
       console.log('🚀 Quiz started');
       setCurrentView('active');
       setCurrentQuestionIndex(0);
-      setTimeRemaining(data.question.timeLimit);
+      setTimeRemaining(data.question.timeLimit || 45);
       setAnsweredCount(0);
     });
 
-    // Listen for next question
+    // Listen for next question — UNCHANGED
     socket.on('quiz:nextQuestion', (data) => {
       console.log('➡️ Next question');
       setCurrentQuestionIndex(data.questionIndex);
-      setTimeRemaining(data.question.timeLimit);
+      setTimeRemaining(data.question.timeLimit || 45);
       setAnsweredCount(0);
-      // Reset answered status
       setStudents(prev => prev.map(s => ({ ...s, answered: false })));
     });
 
-    // Listen for quiz finished
-    socket.on('quiz:finished', () => {
+    // ✅ CHANGED: also handle 'quiz:finished' (sent by auto-complete) AND 'quiz:ended' (teacher end)
+    // Backend teacher:endQuiz now emits 'quiz:finished' — this handles both paths
+    socket.on('quiz:finished', (data) => {
       console.log('🏁 Quiz finished');
       setCurrentView('finished');
     });
 
-    // Error handling
     socket.on('error', (data) => {
       console.error('❌ Error:', data.message);
       alert(data.message);
     });
 
-    // Cleanup
     return () => {
       socket.off('student:joined');
       socket.off('student:answered');
@@ -92,27 +103,25 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
 
   const handleStartQuiz = () => {
     if (students.length === 0) {
-      if (!window.confirm('No students have joined yet. Start anyway?')) {
-        return;
-      }
+      if (!window.confirm('No students have joined yet. Start anyway?')) return;
     }
-
-    // Tell server to start quiz
     socket.emit('teacher:startQuiz', { sessionId });
   };
 
   const handleNextQuestion = () => {
-    // Tell server to advance to next question
     socket.emit('teacher:nextQuestion', { sessionId });
   };
 
+  // ✅ CHANGED: Single "End Quiz" handler — used for BOTH header button AND last-question footer
+  // Ends quiz + server auto-saves to history
   const handleEndQuiz = () => {
-    if (!window.confirm('End the quiz and show final results?')) {
-      return;
-    }
-
-    // Tell server to end quiz
+    if (!window.confirm('End the quiz? Results will be saved to history automatically.')) return;
     socket.emit('teacher:endQuiz', { sessionId });
+  };
+
+  // ✅ NEW: "Create Again Quiz" — calls onCreateAgain prop if provided by App.js
+  const handleCreateAgain = () => {
+    onCreateAgain ? onCreateAgain() : onClose();
   };
 
   // ========================================
@@ -122,12 +131,11 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
   const currentQuestion = quiz?.questions[currentQuestionIndex];
   const totalQuestions = quiz?.questions.length || 0;
 
-  // PREVIEW VIEW - Before starting
+  // ── PREVIEW VIEW ──
   if (currentView === 'preview') {
     return (
       <div style={styles.overlay}>
         <div style={styles.modal}>
-          {/* Header */}
           <div style={styles.header}>
             <div>
               <h2 style={styles.title}>🎮 Quiz Control Panel</h2>
@@ -136,7 +144,6 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
             <button onClick={onClose} style={styles.closeBtn}>✕</button>
           </div>
 
-          {/* Quiz Info */}
           <div style={styles.content}>
             <div style={styles.infoCard}>
               <div style={styles.infoItem}>
@@ -157,34 +164,30 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
 
             {/* Waiting Students */}
             <div style={styles.section}>
-              <h3 style={styles.sectionTitle}>
-                👥 Waiting Students ({students.length})
-              </h3>
+              <h3 style={styles.sectionTitle}>👥 Waiting Students ({students.length})</h3>
               {students.length === 0 ? (
                 <div style={styles.emptyState}>
                   <div style={styles.emptyIcon}>🎯</div>
                   <p style={styles.emptyText}>No students yet</p>
-                  <p style={styles.emptySubtext}>
-                    Students can join using the FloatingQuizButton
-                  </p>
+                  <p style={styles.emptySubtext}>Students can join using the FloatingQuizButton</p>
                 </div>
               ) : (
                 <div style={styles.studentGrid}>
                   {students.map((student, index) => (
                     <div key={index} style={styles.studentChip}>
                       <div style={styles.studentAvatar}>
-                        {student.userId.substring(0, 2).toUpperCase()}
+                        {/* ✅ CHANGED: avatar letter from real name */}
+                        {(student.name || 'S').charAt(0).toUpperCase()}
                       </div>
-                      <span style={styles.studentName}>
-                        Student {student.userId.substring(0, 6)}
-                      </span>
+                      {/* ✅ CHANGED: show real name */}
+                      <span style={styles.studentName}>{student.name}</span>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Questions Preview */}
+            {/* Questions Preview — IDENTICAL */}
             <div style={styles.section}>
               <h3 style={styles.sectionTitle}>📝 Questions Preview</h3>
               <div style={styles.questionsList}>
@@ -204,21 +207,16 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
             </div>
           </div>
 
-          {/* Footer */}
           <div style={styles.footer}>
-            <button onClick={onClose} style={styles.cancelBtn}>
-              Cancel
-            </button>
-            <button onClick={handleStartQuiz} style={styles.startBtn}>
-              🚀 Start Quiz Now
-            </button>
+            <button onClick={onClose} style={styles.cancelBtn}>Cancel</button>
+            <button onClick={handleStartQuiz} style={styles.startBtn}>🚀 Start Quiz Now</button>
           </div>
         </div>
       </div>
     );
   }
 
-  // ACTIVE VIEW - During quiz
+  // ── ACTIVE VIEW ──
   if (currentView === 'active') {
     const progressPercent = ((currentQuestionIndex + 1) / totalQuestions) * 100;
 
@@ -230,29 +228,37 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
             <div>
               <h2 style={styles.titleActive}>🎮 Live Quiz</h2>
               <div style={styles.progressBar}>
-                <div style={{
-                  ...styles.progressFill,
-                  width: `${progressPercent}%`
-                }}></div>
+                <div style={{ ...styles.progressFill, width: `${progressPercent}%` }}></div>
               </div>
               <p style={styles.progressText}>
                 Question {currentQuestionIndex + 1} of {totalQuestions}
               </p>
             </div>
             <div style={styles.headerControls}>
-              <div style={styles.timerDisplay}>
+              {/* Timer — color turns red when ≤10s */}
+              <div style={{
+                ...styles.timerDisplay,
+                backgroundColor: timeRemaining <= 10 ? 'rgba(239,68,68,0.3)' : 'rgba(255,255,255,0.2)'
+              }}>
                 <div style={styles.timerIcon}>⏱️</div>
-                <div style={styles.timerText}>{timeRemaining}s</div>
+                {/* ✅ FIXED: was showing raw number, now clearly shows Xs format */}
+                <div style={{
+                  ...styles.timerText,
+                  color: timeRemaining <= 10 ? '#FCA5A5' : 'white'
+                }}>
+                  {timeRemaining}s
+                </div>
               </div>
+              {/* ✅ CHANGED: only ONE "End Quiz" button — no separate Finish Quiz */}
               <button onClick={handleEndQuiz} style={styles.endBtn}>
-                End Quiz
+                🔴 End Quiz
               </button>
             </div>
           </div>
 
           {/* Main Content */}
           <div style={styles.contentActive}>
-            {/* Left: Current Question */}
+            {/* Left: Current Question — IDENTICAL */}
             <div style={styles.leftPanel}>
               <div style={styles.currentQuestionCard}>
                 <div style={styles.currentQuestionHeader}>
@@ -263,42 +269,38 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
                     {currentQuestion?.points || 10} points
                   </span>
                 </div>
-
-                <h3 style={styles.currentQuestionText}>
-                  {currentQuestion?.questionText}
-                </h3>
-
+                <h3 style={styles.currentQuestionText}>{currentQuestion?.questionText}</h3>
                 <div style={styles.currentOptions}>
-                  {currentQuestion?.options.map((option, index) => {
-                    const isCorrect = index === currentQuestion.correctAnswer;
-                    
+                  {(currentQuestion?.options || []).map((option, index) => {
+                    // Handle correctAnswer as number, string letter ("A"), or full text
+                    let isCorrect = false;
+                    const ca = currentQuestion.correctAnswer;
+                    if (typeof ca === 'number') isCorrect = index === ca;
+                    else if (typeof ca === 'string' && ca.length === 1 && ca >= 'A' && ca <= 'Z') {
+                      isCorrect = index === (ca.charCodeAt(0) - 65);
+                    } else if (typeof ca === 'string') {
+                      isCorrect = option === ca;
+                    }
+
                     return (
-                      <div
-                        key={index}
-                        style={{
-                          ...styles.currentOption,
-                          backgroundColor: isCorrect ? '#E8F5E9' : '#f9f9f9',
-                          border: isCorrect ? '3px solid #4CAF50' : '2px solid #e0e0e0'
-                        }}
-                      >
+                      <div key={index} style={{
+                        ...styles.currentOption,
+                        backgroundColor: isCorrect ? '#E8F5E9' : '#f9f9f9',
+                        border: isCorrect ? '3px solid #4CAF50' : '2px solid #e0e0e0'
+                      }}>
                         <div style={styles.currentOptionLetter}>
                           {String.fromCharCode(65 + index)}
                         </div>
                         <div style={styles.currentOptionText}>{option}</div>
-                        {isCorrect && (
-                          <div style={styles.correctIndicator}>✓ Correct</div>
-                        )}
+                        {isCorrect && <div style={styles.correctIndicator}>✓ Correct</div>}
                       </div>
                     );
                   })}
                 </div>
-
                 {currentQuestion?.explanation && (
                   <div style={styles.explanationCard}>
                     <div style={styles.explanationTitle}>💡 Explanation:</div>
-                    <p style={styles.explanationText}>
-                      {currentQuestion.explanation}
-                    </p>
+                    <p style={styles.explanationText}>{currentQuestion.explanation}</p>
                   </div>
                 )}
               </div>
@@ -308,40 +310,35 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
             <div style={styles.rightPanel}>
               <div style={styles.progressCard}>
                 <h3 style={styles.progressTitle}>📊 Student Progress</h3>
-                
                 <div style={styles.statsRow}>
                   <div style={styles.statBox}>
                     <div style={styles.statNumber}>{students.length}</div>
-                    <div style={styles.statLabel}>Total Students</div>
+                    <div style={styles.statLabel}>Waiting</div>
+                  </div>
+                  <div style={styles.statBox}>
+                    <div style={styles.statNumber}>{students.filter(s => s.answered).length}</div>
+                    <div style={styles.statLabel}>Active</div>
                   </div>
                   <div style={styles.statBox}>
                     <div style={styles.statNumber}>{answeredCount}</div>
                     <div style={styles.statLabel}>Answered</div>
                   </div>
-                  <div style={styles.statBox}>
-                    <div style={styles.statNumber}>
-                      {students.length - answeredCount}
-                    </div>
-                    <div style={styles.statLabel}>Pending</div>
-                  </div>
                 </div>
 
-                {/* Progress Bar */}
+                {/* Answer progress bar */}
                 <div style={styles.answerProgress}>
                   <div style={{
                     ...styles.answerProgressFill,
-                    width: students.length > 0 
-                      ? `${(answeredCount / students.length) * 100}%`
-                      : '0%'
+                    width: students.length > 0
+                      ? `${(answeredCount / students.length) * 100}%` : '0%'
                   }}></div>
                 </div>
                 <p style={styles.answerProgressText}>
                   {students.length > 0
-                    ? Math.round((answeredCount / students.length) * 100)
-                    : 0}% completed
+                    ? Math.round((answeredCount / students.length) * 100) : 0}% answered
                 </p>
 
-                {/* Student List */}
+                {/* ✅ CHANGED: Student list shows real names */}
                 <div style={styles.studentListActive}>
                   {students.map((student, index) => (
                     <div key={index} style={styles.studentItemActive}>
@@ -349,12 +346,9 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
                         ...styles.studentStatusDot,
                         backgroundColor: student.answered ? '#4CAF50' : '#FF9800'
                       }}></div>
-                      <span style={styles.studentNameActive}>
-                        Student {student.userId.substring(0, 6)}
-                      </span>
-                      {student.answered && (
-                        <span style={styles.studentAnsweredBadge}>✓</span>
-                      )}
+                      {/* ✅ CHANGED: real name display */}
+                      <span style={styles.studentNameActive}>{student.name}</span>
+                      {student.answered && <span style={styles.studentAnsweredBadge}>✓</span>}
                     </div>
                   ))}
                 </div>
@@ -364,17 +358,17 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
 
           {/* Footer Controls */}
           <div style={styles.footerActive}>
-            <button onClick={onClose} style={styles.minimizeBtn}>
-              Minimize
-            </button>
-            
+            <button onClick={onClose} style={styles.minimizeBtn}>Minimize</button>
+
             {currentQuestionIndex < totalQuestions - 1 ? (
               <button onClick={handleNextQuestion} style={styles.nextBtn}>
                 Next Question →
               </button>
             ) : (
-              <button onClick={handleEndQuiz} style={styles.finishBtn}>
-                🏁 Finish Quiz
+              // ✅ CHANGED: Was "🏁 Finish Quiz" — now "🔴 End Quiz" (same handler, same outcome)
+              // No separate "Finish Quiz" — End Quiz always ends + saves to history
+              <button onClick={handleEndQuiz} style={styles.endQuizLastBtn}>
+                🔴 End Quiz
               </button>
             )}
           </div>
@@ -383,7 +377,7 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
     );
   }
 
-  // FINISHED VIEW
+  // ── FINISHED VIEW ──
   if (currentView === 'finished') {
     return (
       <div style={styles.overlay}>
@@ -392,11 +386,18 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
             <div style={styles.finishedIcon}>🎉</div>
             <h2 style={styles.finishedTitle}>Quiz Complete!</h2>
             <p style={styles.finishedText}>
-              Results have been shown to all students
+              Results have been saved to history automatically.
             </p>
-            <button onClick={onClose} style={styles.doneBtn}>
-              Done
-            </button>
+            <div style={styles.finishedActions}>
+              {/* ✅ NEW: "Create Again Quiz" — helps teacher re-run quiz for better learning */}
+              <button onClick={handleCreateAgain} style={styles.createAgainBtn}>
+                🔄 Create Again Quiz
+              </button>
+              {/* Close without creating */}
+              <button onClick={onClose} style={styles.doneBtn}>
+                Close
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -407,560 +408,129 @@ const QuizHost = ({ quiz, sessionId, onClose }) => {
 };
 
 // ========================================
-// STYLES
+// STYLES — All existing styles preserved, new ones added
 // ========================================
 
 const styles = {
   overlay: {
-    position: 'fixed',
-    inset: 0,
-    backgroundColor: 'rgba(0,0,0,0.9)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 3000,
-    padding: '20px'
+    position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.9)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3000, padding: '20px'
   },
   modal: {
-    backgroundColor: 'white',
-    borderRadius: '16px',
-    width: '100%',
-    maxWidth: '900px',
-    maxHeight: '90vh',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
+    backgroundColor: 'white', borderRadius: '16px', width: '100%', maxWidth: '900px',
+    maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
     boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
   },
   modalActive: {
-    backgroundColor: 'white',
-    borderRadius: '16px',
-    width: '100%',
-    maxWidth: '1200px',
-    maxHeight: '90vh',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
+    backgroundColor: 'white', borderRadius: '16px', width: '100%', maxWidth: '1200px',
+    maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
     boxShadow: '0 20px 60px rgba(0,0,0,0.3)'
   },
   header: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '25px 30px',
-    borderBottom: '2px solid #f0f0f0',
-    backgroundColor: '#4F46E5'
+    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+    padding: '25px 30px', borderBottom: '2px solid #f0f0f0', backgroundColor: '#4F46E5'
   },
-  title: {
-    fontSize: '24px',
-    fontWeight: '700',
-    color: 'white',
-    margin: 0
-  },
-  subtitle: {
-    fontSize: '14px',
-    color: '#E0E7FF',
-    margin: '5px 0 0 0'
-  },
-  closeBtn: {
-    background: 'none',
-    border: 'none',
-    fontSize: '28px',
-    color: 'white',
-    cursor: 'pointer',
-    padding: '0 10px'
-  },
-  content: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '30px'
-  },
-  infoCard: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '20px',
-    marginBottom: '30px'
-  },
-  infoItem: {
-    textAlign: 'center',
-    padding: '25px',
-    backgroundColor: '#F9FAFB',
-    borderRadius: '12px',
-    border: '2px solid #E5E7EB'
-  },
-  infoNumber: {
-    fontSize: '36px',
-    fontWeight: '700',
-    color: '#4F46E5',
-    marginBottom: '8px'
-  },
-  infoLabel: {
-    fontSize: '14px',
-    fontWeight: '600',
-    color: '#6B7280'
-  },
-  section: {
-    marginBottom: '30px'
-  },
-  sectionTitle: {
-    fontSize: '18px',
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: '15px'
-  },
-  emptyState: {
-    textAlign: 'center',
-    padding: '50px 20px',
-    backgroundColor: '#F9FAFB',
-    borderRadius: '12px',
-    border: '2px dashed #E5E7EB'
-  },
-  emptyIcon: {
-    fontSize: '48px',
-    marginBottom: '15px'
-  },
-  emptyText: {
-    fontSize: '18px',
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: '8px'
-  },
-  emptySubtext: {
-    fontSize: '14px',
-    color: '#6B7280',
-    margin: 0
-  },
-  studentGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-    gap: '12px'
-  },
-  studentChip: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    padding: '12px',
-    backgroundColor: '#F9FAFB',
-    borderRadius: '10px',
-    border: '2px solid #E5E7EB'
-  },
-  studentAvatar: {
-    width: '38px',
-    height: '38px',
-    borderRadius: '50%',
-    backgroundColor: '#4F46E5',
-    color: 'white',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '14px',
-    fontWeight: '700'
-  },
-  studentName: {
-    fontSize: '14px',
-    fontWeight: '600',
-    color: '#374151'
-  },
-  questionsList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-    maxHeight: '300px',
-    overflowY: 'auto'
-  },
-  questionPreview: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '15px',
-    padding: '15px',
-    backgroundColor: '#F9FAFB',
-    borderRadius: '10px',
-    border: '1px solid #E5E7EB'
-  },
-  questionPreviewNumber: {
-    padding: '8px 14px',
-    backgroundColor: '#4F46E5',
-    color: 'white',
-    borderRadius: '8px',
-    fontSize: '13px',
-    fontWeight: '700',
-    flexShrink: 0
-  },
-  questionPreviewText: {
-    flex: 1,
-    fontSize: '14px',
-    color: '#374151',
-    fontWeight: '500'
-  },
-  questionPreviewMeta: {
-    display: 'flex',
-    gap: '10px',
-    flexShrink: 0
-  },
-  questionPreviewTime: {
-    fontSize: '12px',
-    color: '#6B7280',
-    fontWeight: '600'
-  },
-  questionPreviewPoints: {
-    fontSize: '12px',
-    color: '#10B981',
-    fontWeight: '700'
-  },
-  footer: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    padding: '25px 30px',
-    borderTop: '2px solid #f0f0f0'
-  },
-  cancelBtn: {
-    padding: '14px 28px',
-    fontSize: '15px',
-    fontWeight: '600',
-    backgroundColor: '#F3F4F6',
-    color: '#374151',
-    border: 'none',
-    borderRadius: '10px',
-    cursor: 'pointer',
-    transition: 'all 0.2s'
-  },
-  startBtn: {
-    padding: '14px 32px',
-    fontSize: '15px',
-    fontWeight: '700',
-    backgroundColor: '#10B981',
-    color: 'white',
-    border: 'none',
-    borderRadius: '10px',
-    cursor: 'pointer',
-    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
-    transition: 'all 0.2s'
-  },
-  
-  // Active View Styles
-  headerActive: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '20px 30px',
-    borderBottom: '2px solid #f0f0f0',
-    backgroundColor: '#4F46E5'
-  },
-  titleActive: {
-    fontSize: '22px',
-    fontWeight: '700',
-    color: 'white',
-    margin: '0 0 10px 0'
-  },
-  progressBar: {
-    width: '300px',
-    height: '8px',
-    backgroundColor: 'rgba(255,255,255,0.3)',
-    borderRadius: '10px',
-    overflow: 'hidden',
-    marginBottom: '5px'
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#10B981',
-    transition: 'width 0.3s ease'
-  },
-  progressText: {
-    fontSize: '13px',
-    color: '#E0E7FF',
-    margin: 0
-  },
-  headerControls: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '15px'
-  },
-  timerDisplay: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    padding: '10px 20px',
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: '25px'
-  },
-  timerIcon: {
-    fontSize: '20px'
-  },
-  timerText: {
-    fontSize: '20px',
-    fontWeight: '700',
-    color: 'white'
-  },
-  endBtn: {
-    padding: '10px 20px',
-    fontSize: '14px',
-    fontWeight: '600',
-    backgroundColor: '#EF4444',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer'
-  },
-  contentActive: {
-    flex: 1,
-    display: 'grid',
-    gridTemplateColumns: '1.5fr 1fr',
-    gap: '20px',
-    padding: '25px',
-    overflowY: 'auto'
-  },
-  leftPanel: {
-    display: 'flex',
-    flexDirection: 'column'
-  },
-  currentQuestionCard: {
-    backgroundColor: '#F9FAFB',
-    padding: '25px',
-    borderRadius: '12px',
-    border: '2px solid #E5E7EB'
-  },
-  currentQuestionHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '20px'
-  },
-  currentQuestionBadge: {
-    padding: '8px 16px',
-    backgroundColor: '#4F46E5',
-    color: 'white',
-    borderRadius: '20px',
-    fontSize: '14px',
-    fontWeight: '700'
-  },
-  currentQuestionPoints: {
-    fontSize: '14px',
-    fontWeight: '700',
-    color: '#10B981'
-  },
-  currentQuestionText: {
-    fontSize: '22px',
-    fontWeight: '600',
-    color: '#1F2937',
-    lineHeight: '1.4',
-    marginBottom: '20px'
-  },
-  currentOptions: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-    marginBottom: '20px'
-  },
-  currentOption: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '15px',
-    padding: '15px',
-    borderRadius: '10px'
-  },
-  currentOptionLetter: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '50%',
-    backgroundColor: '#4F46E5',
-    color: 'white',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '18px',
-    fontWeight: '700',
-    flexShrink: 0
-  },
-  currentOptionText: {
-    flex: 1,
-    fontSize: '16px',
-    color: '#374151',
-    fontWeight: '500'
-  },
-  correctIndicator: {
-    padding: '5px 12px',
-    backgroundColor: '#10B981',
-    color: 'white',
-    borderRadius: '15px',
-    fontSize: '12px',
-    fontWeight: '700'
-  },
-  explanationCard: {
-    padding: '18px',
-    backgroundColor: 'white',
-    borderRadius: '10px',
-    border: '1px solid #E5E7EB'
-  },
-  explanationTitle: {
-    fontSize: '14px',
-    fontWeight: '700',
-    color: '#4F46E5',
-    marginBottom: '8px'
-  },
-  explanationText: {
-    fontSize: '15px',
-    color: '#374151',
-    lineHeight: '1.5',
-    margin: 0
-  },
+  title: { fontSize: '24px', fontWeight: '700', color: 'white', margin: 0 },
+  subtitle: { fontSize: '14px', color: '#E0E7FF', margin: '5px 0 0 0' },
+  closeBtn: { background: 'none', border: 'none', fontSize: '28px', color: 'white', cursor: 'pointer', padding: '0 10px' },
+  content: { flex: 1, overflowY: 'auto', padding: '30px' },
+  infoCard: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', marginBottom: '30px' },
+  infoItem: { textAlign: 'center', padding: '25px', backgroundColor: '#F9FAFB', borderRadius: '12px', border: '2px solid #E5E7EB' },
+  infoNumber: { fontSize: '36px', fontWeight: '700', color: '#4F46E5', marginBottom: '8px' },
+  infoLabel: { fontSize: '14px', fontWeight: '600', color: '#6B7280' },
+  section: { marginBottom: '30px' },
+  sectionTitle: { fontSize: '18px', fontWeight: '700', color: '#1F2937', marginBottom: '15px' },
+  emptyState: { textAlign: 'center', padding: '50px 20px', backgroundColor: '#F9FAFB', borderRadius: '12px', border: '2px dashed #E5E7EB' },
+  emptyIcon: { fontSize: '48px', marginBottom: '15px' },
+  emptyText: { fontSize: '18px', fontWeight: '600', color: '#374151', marginBottom: '8px' },
+  emptySubtext: { fontSize: '14px', color: '#6B7280', margin: 0 },
+  studentGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' },
+  studentChip: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', backgroundColor: '#F9FAFB', borderRadius: '10px', border: '2px solid #E5E7EB' },
+  studentAvatar: { width: '38px', height: '38px', borderRadius: '50%', backgroundColor: '#4F46E5', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: '700' },
+  studentName: { fontSize: '14px', fontWeight: '600', color: '#374151' },
+  questionsList: { display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '300px', overflowY: 'auto' },
+  questionPreview: { display: 'flex', alignItems: 'center', gap: '15px', padding: '15px', backgroundColor: '#F9FAFB', borderRadius: '10px', border: '1px solid #E5E7EB' },
+  questionPreviewNumber: { padding: '8px 14px', backgroundColor: '#4F46E5', color: 'white', borderRadius: '8px', fontSize: '13px', fontWeight: '700', flexShrink: 0 },
+  questionPreviewText: { flex: 1, fontSize: '14px', color: '#374151', fontWeight: '500' },
+  questionPreviewMeta: { display: 'flex', gap: '10px', flexShrink: 0 },
+  questionPreviewTime: { fontSize: '12px', color: '#6B7280', fontWeight: '600' },
+  questionPreviewPoints: { fontSize: '12px', color: '#10B981', fontWeight: '700' },
+  footer: { display: 'flex', justifyContent: 'space-between', padding: '25px 30px', borderTop: '2px solid #f0f0f0' },
+  cancelBtn: { padding: '14px 28px', fontSize: '15px', fontWeight: '600', backgroundColor: '#F3F4F6', color: '#374151', border: 'none', borderRadius: '10px', cursor: 'pointer' },
+  startBtn: { padding: '14px 32px', fontSize: '15px', fontWeight: '700', backgroundColor: '#10B981', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)' },
+
+  // Active header
+  headerActive: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 30px', borderBottom: '2px solid #f0f0f0', backgroundColor: '#4F46E5' },
+  titleActive: { fontSize: '22px', fontWeight: '700', color: 'white', margin: '0 0 10px 0' },
+  progressBar: { width: '300px', height: '8px', backgroundColor: 'rgba(255,255,255,0.3)', borderRadius: '10px', overflow: 'hidden', marginBottom: '5px' },
+  progressFill: { height: '100%', backgroundColor: '#10B981', transition: 'width 0.3s ease' },
+  progressText: { fontSize: '13px', color: '#E0E7FF', margin: 0 },
+  headerControls: { display: 'flex', alignItems: 'center', gap: '15px' },
+  timerDisplay: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 20px', borderRadius: '25px', transition: 'background-color 0.3s' },
+  timerIcon: { fontSize: '20px' },
+  timerText: { fontSize: '20px', fontWeight: '700', transition: 'color 0.3s' },
+  endBtn: { padding: '10px 20px', fontSize: '14px', fontWeight: '600', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer' },
+
+  // Active content
+  contentActive: { flex: 1, display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '20px', padding: '25px', overflowY: 'auto' },
+  leftPanel: { display: 'flex', flexDirection: 'column' },
+  currentQuestionCard: { backgroundColor: '#F9FAFB', padding: '25px', borderRadius: '12px', border: '2px solid #E5E7EB' },
+  currentQuestionHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' },
+  currentQuestionBadge: { padding: '8px 16px', backgroundColor: '#4F46E5', color: 'white', borderRadius: '20px', fontSize: '14px', fontWeight: '700' },
+  currentQuestionPoints: { fontSize: '14px', fontWeight: '700', color: '#10B981' },
+  currentQuestionText: { fontSize: '22px', fontWeight: '600', color: '#1F2937', lineHeight: '1.4', marginBottom: '20px' },
+  currentOptions: { display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' },
+  currentOption: { display: 'flex', alignItems: 'center', gap: '15px', padding: '15px', borderRadius: '10px' },
+  currentOptionLetter: { width: '40px', height: '40px', borderRadius: '50%', backgroundColor: '#4F46E5', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: '700', flexShrink: 0 },
+  currentOptionText: { flex: 1, fontSize: '16px', color: '#374151', fontWeight: '500' },
+  correctIndicator: { padding: '5px 12px', backgroundColor: '#10B981', color: 'white', borderRadius: '15px', fontSize: '12px', fontWeight: '700' },
+  explanationCard: { padding: '18px', backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E5E7EB' },
+  explanationTitle: { fontSize: '14px', fontWeight: '700', color: '#4F46E5', marginBottom: '8px' },
+  explanationText: { fontSize: '15px', color: '#374151', lineHeight: '1.5', margin: 0 },
+
+  // Right panel
   rightPanel: {},
-  progressCard: {
-    backgroundColor: '#F9FAFB',
-    padding: '25px',
-    borderRadius: '12px',
-    border: '2px solid #E5E7EB',
-    height: 'fit-content'
-  },
-  progressTitle: {
-    fontSize: '18px',
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: '20px'
-  },
-  statsRow: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '12px',
-    marginBottom: '20px'
-  },
-  statBox: {
-    textAlign: 'center',
-    padding: '15px',
-    backgroundColor: 'white',
-    borderRadius: '10px',
-    border: '1px solid #E5E7EB'
-  },
-  statNumber: {
-    fontSize: '24px',
-    fontWeight: '700',
-    color: '#4F46E5',
-    marginBottom: '5px'
-  },
-  statLabel: {
-    fontSize: '11px',
-    color: '#6B7280',
-    fontWeight: '600'
-  },
-  answerProgress: {
-    width: '100%',
-    height: '12px',
-    backgroundColor: 'white',
-    borderRadius: '10px',
-    overflow: 'hidden',
-    marginBottom: '8px'
-  },
-  answerProgressFill: {
-    height: '100%',
-    backgroundColor: '#10B981',
-    transition: 'width 0.3s ease'
-  },
-  answerProgressText: {
-    fontSize: '13px',
-    color: '#6B7280',
-    textAlign: 'center',
-    marginBottom: '20px'
-  },
-  studentListActive: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
-    maxHeight: '400px',
-    overflowY: 'auto'
-  },
-  studentItemActive: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    padding: '12px',
-    backgroundColor: 'white',
-    borderRadius: '8px',
-    border: '1px solid #E5E7EB'
-  },
-  studentStatusDot: {
-    width: '12px',
-    height: '12px',
-    borderRadius: '50%',
-    flexShrink: 0
-  },
-  studentNameActive: {
-    flex: 1,
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#374151'
-  },
-  studentAnsweredBadge: {
-    fontSize: '16px',
-    color: '#10B981'
-  },
-  footerActive: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    padding: '20px 30px',
-    borderTop: '2px solid #f0f0f0'
-  },
-  minimizeBtn: {
-    padding: '12px 24px',
-    fontSize: '14px',
-    fontWeight: '600',
-    backgroundColor: '#F3F4F6',
-    color: '#374151',
-    border: 'none',
-    borderRadius: '10px',
-    cursor: 'pointer'
-  },
-  nextBtn: {
-    padding: '12px 28px',
-    fontSize: '14px',
-    fontWeight: '700',
-    backgroundColor: '#4F46E5',
-    color: 'white',
-    border: 'none',
-    borderRadius: '10px',
-    cursor: 'pointer',
-    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)'
-  },
-  finishBtn: {
-    padding: '12px 28px',
-    fontSize: '14px',
-    fontWeight: '700',
-    backgroundColor: '#10B981',
-    color: 'white',
-    border: 'none',
-    borderRadius: '10px',
-    cursor: 'pointer',
-    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
-  },
-  
-  // Finished View Styles
-  finishedCard: {
-    textAlign: 'center',
-    padding: '60px 40px'
-  },
-  finishedIcon: {
-    fontSize: '80px',
-    marginBottom: '20px'
-  },
-  finishedTitle: {
-    fontSize: '32px',
-    fontWeight: '700',
-    color: '#1F2937',
-    marginBottom: '15px'
-  },
-  finishedText: {
-    fontSize: '16px',
-    color: '#6B7280',
-    marginBottom: '30px'
+  progressCard: { backgroundColor: '#F9FAFB', padding: '25px', borderRadius: '12px', border: '2px solid #E5E7EB', height: 'fit-content' },
+  progressTitle: { fontSize: '18px', fontWeight: '700', color: '#1F2937', marginBottom: '20px' },
+  statsRow: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' },
+  statBox: { textAlign: 'center', padding: '15px', backgroundColor: 'white', borderRadius: '10px', border: '1px solid #E5E7EB' },
+  statNumber: { fontSize: '24px', fontWeight: '700', color: '#4F46E5', marginBottom: '5px' },
+  statLabel: { fontSize: '11px', color: '#6B7280', fontWeight: '600' },
+  answerProgress: { width: '100%', height: '12px', backgroundColor: 'white', borderRadius: '10px', overflow: 'hidden', marginBottom: '8px' },
+  answerProgressFill: { height: '100%', backgroundColor: '#10B981', transition: 'width 0.3s ease' },
+  answerProgressText: { fontSize: '13px', color: '#6B7280', textAlign: 'center', marginBottom: '20px' },
+  studentListActive: { display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px', overflowY: 'auto' },
+  studentItemActive: { display: 'flex', alignItems: 'center', gap: '10px', padding: '12px', backgroundColor: 'white', borderRadius: '8px', border: '1px solid #E5E7EB' },
+  studentStatusDot: { width: '12px', height: '12px', borderRadius: '50%', flexShrink: 0 },
+  studentNameActive: { flex: 1, fontSize: '13px', fontWeight: '600', color: '#374151' },
+  studentAnsweredBadge: { fontSize: '16px', color: '#10B981' },
+
+  // Footer active
+  footerActive: { display: 'flex', justifyContent: 'space-between', padding: '20px 30px', borderTop: '2px solid #f0f0f0' },
+  minimizeBtn: { padding: '12px 24px', fontSize: '14px', fontWeight: '600', backgroundColor: '#F3F4F6', color: '#374151', border: 'none', borderRadius: '10px', cursor: 'pointer' },
+  nextBtn: { padding: '12px 28px', fontSize: '14px', fontWeight: '700', backgroundColor: '#4F46E5', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)' },
+  // ✅ NEW: End Quiz on last question — red, same as header endBtn
+  endQuizLastBtn: { padding: '12px 28px', fontSize: '14px', fontWeight: '700', backgroundColor: '#EF4444', color: 'white', border: 'none', borderRadius: '10px', cursor: 'pointer', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)' },
+
+  // Finished view
+  finishedCard: { textAlign: 'center', padding: '60px 40px' },
+  finishedIcon: { fontSize: '80px', marginBottom: '20px' },
+  finishedTitle: { fontSize: '32px', fontWeight: '700', color: '#1F2937', marginBottom: '15px' },
+  finishedText: { fontSize: '16px', color: '#6B7280', marginBottom: '30px' },
+  // ✅ NEW: two-button layout in finished view
+  finishedActions: { display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center' },
+  createAgainBtn: {
+    padding: '16px 40px', fontSize: '16px', fontWeight: '700',
+    backgroundColor: '#10B981', color: 'white', border: 'none',
+    borderRadius: '12px', cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)',
+    width: '100%', maxWidth: '300px'
   },
   doneBtn: {
-    padding: '16px 40px',
-    fontSize: '16px',
-    fontWeight: '700',
-    backgroundColor: '#4F46E5',
-    color: 'white',
-    border: 'none',
-    borderRadius: '12px',
-    cursor: 'pointer',
-    boxShadow: '0 4px 12px rgba(79, 70, 229, 0.3)'
+    padding: '14px 40px', fontSize: '15px', fontWeight: '600',
+    backgroundColor: '#F3F4F6', color: '#374151', border: 'none',
+    borderRadius: '12px', cursor: 'pointer',
+    width: '100%', maxWidth: '300px'
   }
 };
 

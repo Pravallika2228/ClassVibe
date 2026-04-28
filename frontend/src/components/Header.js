@@ -1,4 +1,8 @@
-// src/components/Header.jsx
+// frontend/src/components/Header.js
+// ✅ CHANGES: Removed "+ Create Instant", "📅 Schedule", "🎮 Create Quiz" buttons
+//             (dashboard handles these via sidebar and Instructor Hub)
+// Everything else — Analytics, End Session, Leave Meeting, Notification Bell, Menu — IDENTICAL
+
 import React from "react";
 import NotificationBell from './NotificationBell';
 
@@ -35,46 +39,13 @@ const Header = ({
       </div>
 
       <div style={styles.right}>
-        {/* ⭐ TEACHER BUTTONS - Smart visibility */}
         {userRole === "teacher" && (
           <>
-            {/* Create Instant - ONLY when NOT in session */}
-            {!groupName && onCreateGroup && (
-              <button
-                onClick={onCreateGroup}
-                style={styles.createButton}
-                onMouseEnter={(e) => (e.target.style.backgroundColor = "#128C7E")}
-                onMouseLeave={(e) => (e.target.style.backgroundColor = "#25D366")}
-              >
-                + Create Instant
-              </button>
-            )}
+            {/* ✅ REMOVED: "+ Create Instant" button */}
+            {/* ✅ REMOVED: "📅 Schedule" button */}
+            {/* ✅ REMOVED: "🎮 Create Quiz" button */}
 
-            {/* Schedule - ALWAYS visible for teachers */}
-            {onOpenSchedule && (
-              <button
-                onClick={onOpenSchedule}
-                style={styles.scheduleButton}
-                onMouseEnter={(e) => (e.target.style.backgroundColor = "#0f7168")}
-                onMouseLeave={(e) => (e.target.style.backgroundColor = "#128C7E")}
-              >
-                📅 Schedule
-              </button>
-            )}
-
-            {/* Quiz - ONLY when NOT in session (FloatingButton handles in-session) */}
-            {!groupName && onOpenQuiz && (
-              <button
-                onClick={onOpenQuiz}
-                style={styles.quizButton}
-                onMouseEnter={(e) => (e.target.style.backgroundColor = "#7B1FA2")}
-                onMouseLeave={(e) => (e.target.style.backgroundColor = "#9C27B0")}
-              >
-                🎮 Create Quiz
-              </button>
-            )}
-
-            {/* Analytics - ONLY when IN a session */}
+            {/* Analytics — ONLY when teacher is IN a session — UNCHANGED */}
             {groupName && onOpenAnalytics && (
               <button
                 onClick={onOpenAnalytics}
@@ -88,7 +59,7 @@ const Header = ({
           </>
         )}
 
-        {/* Admin session controls */}
+        {/* Admin End Session — UNCHANGED */}
         {isAdmin && groupName && (
           <button
             onClick={onEndSession}
@@ -100,7 +71,7 @@ const Header = ({
           </button>
         )}
 
-        {/* Student leave button */}
+        {/* Student Leave Meeting — UNCHANGED */}
         {!isAdmin && onLeaveMeeting && groupName && (
           <button
             onClick={onLeaveMeeting}
@@ -112,10 +83,10 @@ const Header = ({
           </button>
         )}
 
-        {/* Notification Bell */}
+        {/* Notification Bell — UNCHANGED */}
         {socket && <NotificationBell socket={socket} />}
 
-        {/* Menu button */}
+        {/* Hamburger Menu — UNCHANGED */}
         <button onClick={onToggleSidebar} style={styles.menuButton}>
           <div style={styles.menuLine} />
           <div style={styles.menuLine} />
@@ -174,39 +145,6 @@ const styles = {
     display: "flex",
     alignItems: "center",
     gap: "12px",
-  },
-  createButton: {
-    padding: "8px 14px",
-    fontSize: "14px",
-    fontWeight: 700,
-    backgroundColor: "#25D366",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    transition: "background-color 0.2s",
-  },
-  scheduleButton: {
-    padding: "8px 14px",
-    fontSize: "14px",
-    fontWeight: 700,
-    backgroundColor: "#128C7E",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    transition: "background-color 0.2s",
-  },
-  quizButton: {
-    padding: "8px 14px",
-    fontSize: "14px",
-    fontWeight: 700,
-    backgroundColor: "#9C27B0",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    transition: "background-color 0.2s",
   },
   analyticsButton: {
     padding: "8px 14px",
