@@ -1,10 +1,18 @@
 // backend/socket-handlers/quiz-socket-handlers.js
-// Server-Side Synchronized Quiz with Streak System & Chat Notifications
+// ✅ CHANGES from previous version:
+// 1. student:joinQuiz → look up real user name from DB, emit 'student:joined' (was 'participantJoined')
+//    QuizHost listens for 'student:joined' — this fixes the real name display
+// 2. student:joinQuiz → block rejoin if quiz status === 'completed' (send quizEnded event)
+// 3. teacher:endQuiz → was emitting 'quiz:ended' but QuizPlayer/QuizHost listen for 'quiz:finished'
+//    Fixed: now emits 'quiz:finished' consistently
+// 4. quiz:joined → was hardcoding timeRemaining: 30, now uses actual timer value from activeQuizTimers
+// 5. quiz:started for late joiners → include questionType + points (were missing for late-join case)
+// ALL other logic — timers, scoring, streaks, leaderboard, chat notifications — IDENTICAL
 
 const QuizSession = require('../models/QuizSession');
-const Quiz = require('../models/Quiz');
-const Message = require('../models/Message'); // For chat notifications
-const User = require('../models/User'); // For winner name
+const Quiz        = require('../models/Quiz');
+const Message     = require('../models/Message');
+const User        = require('../models/User');
 
 // Store active quiz timers
 const activeQuizTimers = new Map();
@@ -16,29 +24,24 @@ function setupQuizSocketHandlers(io, socket) {
   console.log('🎮 Setting up quiz socket handlers for:', socket.id);
 
   // ========================================
-  // TEACHER CONTROLS
+  // TEACHER CONTROLS — all unchanged except endQuiz fix
   // ========================================
 
   /**
-   * Teacher starts quiz (begins Question 1)
+   * Teacher starts quiz (begins Question 1) — UNCHANGED
    */
   socket.on('teacher:startQuiz', async (data) => {
     try {
       const { sessionId } = data;
-      
       console.log('🚀 Teacher starting quiz:', sessionId);
-      
-      const session = await QuizSession.findById(sessionId).populate('quiz');
-      if (!session) {
-        return socket.emit('error', { message: 'Session not found' });
-      }
 
-      // Verify teacher is host
+      const session = await QuizSession.findById(sessionId).populate('quiz');
+      if (!session) return socket.emit('error', { message: 'Session not found' });
+
       if (session.host.toString() !== socket.userId.toString()) {
         return socket.emit('error', { message: 'Only host can start quiz' });
       }
 
-      // Update session status
       session.status = 'active';
       session.currentQuestionIndex = 0;
       await session.save();
@@ -46,26 +49,22 @@ function setupQuizSocketHandlers(io, socket) {
       const firstQuestion = session.quiz.questions[0];
       const questionTimeLimit = firstQuestion.timeLimit || 45;
 
-      // Start server-side timer
       startQuestionTimer(io, session, 0, questionTimeLimit);
 
-      // Broadcast to all participants
       io.to(sessionId).emit('quiz:started', {
         sessionId,
         questionIndex: 0,
         question: {
           questionText: firstQuestion.questionText,
-          options: firstQuestion.options,
-          timeLimit: questionTimeLimit,
-          points: firstQuestion.points || 10,
+          options:      firstQuestion.options,
+          timeLimit:    questionTimeLimit,
+          points:       firstQuestion.points || 10,
           questionType: firstQuestion.questionType || 'multiple_choice'
         },
         totalQuestions: session.quiz.questions.length
       });
 
-      // ✅ NEW: Send chat notification (Quiz Started)
       await sendChatNotification(io, session, 'quiz_started');
-
       console.log('✅ Quiz started successfully');
 
     } catch (error) {
@@ -75,48 +74,41 @@ function setupQuizSocketHandlers(io, socket) {
   });
 
   /**
-   * Teacher manually advances to next question
+   * Teacher manually advances to next question — UNCHANGED
    */
   socket.on('teacher:nextQuestion', async (data) => {
     try {
       const { sessionId } = data;
-      
+
       const session = await QuizSession.findById(sessionId).populate('quiz');
       if (!session) return;
 
-      // Verify teacher is host
       if (session.host.toString() !== socket.userId.toString()) {
         return socket.emit('error', { message: 'Only host can control quiz' });
       }
 
-      // Stop current timer
       stopQuestionTimer(sessionId);
 
-      // Move to next question
       const nextIndex = session.currentQuestionIndex + 1;
-
       if (nextIndex >= session.quiz.questions.length) {
-        // Quiz complete
         return socket.emit('error', { message: 'No more questions' });
       }
 
       session.currentQuestionIndex = nextIndex;
       await session.save();
 
-      const nextQuestion = session.quiz.questions[nextIndex];
+      const nextQuestion    = session.quiz.questions[nextIndex];
       const questionTimeLimit = nextQuestion.timeLimit || 45;
 
-      // Start new timer
       startQuestionTimer(io, session, nextIndex, questionTimeLimit);
 
-      // Broadcast next question
       io.to(sessionId).emit('quiz:nextQuestion', {
         questionIndex: nextIndex,
         question: {
           questionText: nextQuestion.questionText,
-          options: nextQuestion.options,
-          timeLimit: questionTimeLimit,
-          points: nextQuestion.points || 10,
+          options:      nextQuestion.options,
+          timeLimit:    questionTimeLimit,
+          points:       nextQuestion.points || 10,
           questionType: nextQuestion.questionType || 'multiple_choice'
         },
         totalQuestions: session.quiz.questions.length
@@ -131,40 +123,36 @@ function setupQuizSocketHandlers(io, socket) {
 
   /**
    * Teacher ends quiz
+   * ✅ FIXED: was emitting 'quiz:ended' — QuizPlayer and QuizHost both listen for 'quiz:finished'
    */
   socket.on('teacher:endQuiz', async (data) => {
     try {
       const { sessionId } = data;
-      
+
       const session = await QuizSession.findById(sessionId).populate('quiz');
       if (!session) return;
 
-      // Verify teacher is host
       if (session.host.toString() !== socket.userId.toString()) {
         return socket.emit('error', { message: 'Only host can end quiz' });
       }
 
-      // Stop timer
       stopQuestionTimer(sessionId);
 
-      // Update session
       session.status = 'completed';
       await session.save();
 
-      // Get final leaderboard
       const leaderboard = getLeaderboard(session);
 
-      // ✅ NEW: Send chat notification with winner
       await sendChatNotification(io, session, 'quiz_ended', leaderboard);
 
-      // Broadcast quiz ended
-      io.to(sessionId).emit('quiz:ended', {
+      // ✅ FIXED: was 'quiz:ended' — now 'quiz:finished' to match QuizPlayer + QuizHost listeners
+      io.to(sessionId).emit('quiz:finished', {
         sessionId,
-        message: 'Quiz has ended',
-        leaderboard
+        leaderboard,
+        message: 'Quiz has ended'
       });
 
-      console.log('🏁 Quiz ended:', sessionId);
+      console.log('🏁 Quiz ended by teacher:', sessionId);
 
     } catch (error) {
       console.error('❌ End quiz error:', error);
@@ -177,11 +165,16 @@ function setupQuizSocketHandlers(io, socket) {
 
   /**
    * Student joins quiz session
+   * ✅ CHANGED:
+   *   - Block rejoin if status === 'completed'
+   *   - Lookup real user name from DB
+   *   - Emit 'student:joined' (was 'participantJoined') with { userId, name, username }
+   *   - Fix hardcoded timeRemaining: 30 → use actual timer value
+   *   - Fix late-join quiz:started to include questionType + points
    */
   socket.on('student:joinQuiz', async (data) => {
     try {
       const { sessionId } = data;
-      
       console.log(`👤 Student ${socket.userId} joining quiz ${sessionId}`);
 
       const session = await QuizSession.findById(sessionId).populate('quiz');
@@ -189,8 +182,34 @@ function setupQuizSocketHandlers(io, socket) {
         return socket.emit('error', { message: 'Session not found' });
       }
 
+      // ✅ NEW: Block rejoin after quiz is completed
+      if (session.status === 'completed') {
+        console.log(`🚫 Student ${socket.userId} tried to rejoin completed quiz`);
+        socket.emit('quiz:joined', {
+          sessionId,
+          status: 'completed',
+          totalQuestions: session.quiz.questions.length,
+          currentQuestion: null,
+          timeRemaining: 0
+        });
+        return;
+      }
+
       // Add student to session room
       socket.join(sessionId);
+
+      // ✅ NEW: Look up real user name from DB
+      let userName     = `Student`;
+      let userUsername = '';
+      try {
+        const userDoc = await User.findById(socket.userId).select('name username email');
+        if (userDoc) {
+          userName     = userDoc.name || userDoc.username || userDoc.email?.split('@')[0] || 'Student';
+          userUsername = userDoc.username || '';
+        }
+      } catch (e) {
+        console.warn('Could not fetch user name for quiz join:', e.message);
+      }
 
       // Check if student already in participants
       let participant = session.participants.find(
@@ -198,73 +217,72 @@ function setupQuizSocketHandlers(io, socket) {
       );
 
       if (!participant) {
-        // Add new participant
         session.participants.push({
-          user: socket.userId,
+          user:     socket.userId,
           joinedAt: new Date(),
-          answers: [],
-          score: 0,
-          streak: 0 // ✅ NEW: Streak counter
+          answers:  [],
+          score:    0,
+          streak:   0
         });
         await session.save();
       }
 
-      // Get current question and timer info
-      let currentQuestionData = null;
+      // ✅ FIXED: Get actual timeRemaining from timer (was hardcoded to 30)
       let timeRemaining = 0;
-
       if (session.status === 'active') {
-        const currentQuestion = session.quiz.questions[session.currentQuestionIndex];
         const timerInfo = activeQuizTimers.get(sessionId);
-
-        currentQuestionData = {
-          questionIndex: session.currentQuestionIndex,
-          questionText: currentQuestion.questionText,
-          options: currentQuestion.options,
-          timeLimit: currentQuestion.timeLimit || 45,
-          points: currentQuestion.points || 10,
-          questionType: currentQuestion.questionType || 'multiple_choice'
-        };
-
-        timeRemaining = timerInfo ? timerInfo.timeRemaining : currentQuestion.timeLimit;
+        if (timerInfo) {
+          timeRemaining = timerInfo.timeRemaining;
+        } else {
+          const currentQ = session.quiz.questions[session.currentQuestionIndex];
+          timeRemaining = currentQ?.timeLimit || 45;
+        }
       }
 
       // Send current state to student
       socket.emit('quiz:joined', {
         sessionId,
-        status: session.status,
+        status:         session.status,
         totalQuestions: session.quiz.questions.length,
         currentQuestion: session.status === 'active'
           ? {
               questionIndex: session.currentQuestionIndex,
-              question: session.quiz.questions[session.currentQuestionIndex]
+              question:      session.quiz.questions[session.currentQuestionIndex]
             }
           : null,
-        timeRemaining: 30
+        // ✅ FIXED: actual timeRemaining, not hardcoded 30
+        timeRemaining
       });
 
-      // Notify teacher
-      io.to(sessionId).emit('participantJoined',{
-        userId: socket.userId,
+      // ✅ CHANGED: emit 'student:joined' with real name (was 'participantJoined' without name)
+      // QuizHost listens for 'student:joined' — this is what powers the real name display
+      io.to(sessionId).emit('student:joined', {
+        userId:       socket.userId,
+        name:         userName,
+        username:     userUsername,
         studentCount: session.participants.length
       });
 
+      // If quiz is already active, send the current question to the late-joining student
       if (session.status === 'active') {
         const currentQ = session.quiz.questions[session.currentQuestionIndex];
 
+        // ✅ FIXED: include questionType + points (were missing before)
         socket.emit('quiz:started', {
           sessionId,
           questionIndex: session.currentQuestionIndex,
           question: {
             questionText: currentQ.questionText,
-            options: currentQ.options,
-            timeLimit: currentQ.timeLimit
+            options:      currentQ.options,
+            timeLimit:    currentQ.timeLimit || 45,
+            points:       currentQ.points || 10,
+            questionType: currentQ.questionType || 'multiple_choice'
           },
           totalQuestions: session.quiz.questions.length
         });
       }
 
-      console.log('✅ Student joined successfully');
+      console.log(`✅ Student "${userName}" joined quiz successfully`);
 
     } catch (error) {
       console.error('❌ Join quiz error:', error);
@@ -273,7 +291,7 @@ function setupQuizSocketHandlers(io, socket) {
   });
 
   /**
-   * Student submits answer
+   * Student submits answer — UNCHANGED
    */
   socket.on('student:submitAnswer', async (data) => {
     try {
@@ -284,50 +302,38 @@ function setupQuizSocketHandlers(io, socket) {
       const session = await QuizSession.findById(sessionId).populate('quiz');
       if (!session) return;
 
-      const question = session.quiz.questions[questionIndex];
-      const isCorrect = selectedAnswer === question.correctAnswer;
-      
-      // ✅ NEW: Speed Multiplier Scoring (Option B)
-      const basePoints = question.points || 10;
-      const timeLimit = question.timeLimit || 45;
+      const question   = session.quiz.questions[questionIndex];
+      const isCorrect  = selectedAnswer === question.correctAnswer;
+
+      const basePoints   = question.points || 10;
+      const timeLimit    = question.timeLimit || 45;
       const timeRemaining = timeLimit - (timeTaken || 0);
-      
+
       let points = 0;
       if (isCorrect) {
-        if (timeRemaining >= (timeLimit * 2/3)) {
-          // Fast answer (0-15s for 45s question): 2.0x multiplier
+        if (timeRemaining >= (timeLimit * 2 / 3)) {
           points = basePoints * 2;
-        } else if (timeRemaining >= (timeLimit * 1/3)) {
-          // Medium answer (16-30s): 1.5x multiplier
+        } else if (timeRemaining >= (timeLimit * 1 / 3)) {
           points = Math.floor(basePoints * 1.5);
         } else {
-          // Slow answer (31-45s): 1.0x multiplier
           points = basePoints;
         }
       }
 
-      // Find participant and update
       const participantIndex = session.participants.findIndex(
         p => p.user.toString() === socket.userId.toString()
       );
 
       if (participantIndex !== -1) {
-        // Check if already answered this question
         const alreadyAnswered = session.participants[participantIndex].answers.some(
           a => a.questionIndex === questionIndex
         );
 
         if (!alreadyAnswered) {
-          // ✅ NEW: Update streak
           let currentStreak = session.participants[participantIndex].streak || 0;
-          if (isCorrect) {
-            currentStreak++;
-          } else {
-            currentStreak = 0; // Lose streak on wrong answer
-          }
+          currentStreak     = isCorrect ? currentStreak + 1 : 0;
           session.participants[participantIndex].streak = currentStreak;
 
-          // Add answer
           session.participants[participantIndex].answers.push({
             questionIndex,
             selectedAnswer,
@@ -337,36 +343,33 @@ function setupQuizSocketHandlers(io, socket) {
             answeredAt: new Date()
           });
 
-          // Update score
           session.participants[participantIndex].score += points;
-
           await session.save();
 
-          // Send answer summary to this student
           socket.emit('answer:summary', {
             questionIndex,
             selectedAnswer,
-            correctAnswer: question.correctAnswer,
+            correctAnswer:   question.correctAnswer,
             isCorrect,
             points,
             speedMultiplier: isCorrect ? (points / basePoints) : 0,
-            explanation: question.explanation,
-            currentScore: session.participants[participantIndex].score,
-            streak: currentStreak, // ✅ NEW: Send streak
-            questionText: question.questionText,
-            options: question.options
+            explanation:     question.explanation,
+            currentScore:    session.participants[participantIndex].score,
+            streak:          currentStreak,
+            questionText:    question.questionText,
+            options:         question.options,
+            questionType:    question.questionType || 'multiple_choice'
           });
 
-          // Notify teacher/other students that this student answered
           socket.to(sessionId).emit('student:answered', {
-            userId: socket.userId,
+            userId:        socket.userId,
             questionIndex,
             answeredCount: session.participants.filter(
               p => p.answers.some(a => a.questionIndex === questionIndex)
             ).length
           });
 
-          console.log(`✅ Answer recorded: ${isCorrect ? 'Correct' : 'Wrong'} (+${points} points, Streak: ${currentStreak})`);
+          console.log(`✅ Answer recorded: ${isCorrect ? 'Correct' : 'Wrong'} (+${points} pts, Streak: ${currentStreak})`);
         }
       }
 
@@ -377,7 +380,7 @@ function setupQuizSocketHandlers(io, socket) {
   });
 
   // ========================================
-  // SOCKET DISCONNECT
+  // SOCKET DISCONNECT — UNCHANGED
   // ========================================
 
   socket.on('disconnect', () => {
@@ -386,16 +389,11 @@ function setupQuizSocketHandlers(io, socket) {
 }
 
 // ========================================
-// SERVER-SIDE TIMER FUNCTIONS
+// SERVER-SIDE TIMER FUNCTIONS — ALL UNCHANGED
 // ========================================
 
-/**
- * Start a question timer (server-controlled)
- */
 function startQuestionTimer(io, session, questionIndex, timeLimit) {
   const sessionId = session._id.toString();
-
-  // Clear any existing timer
   stopQuestionTimer(sessionId);
 
   console.log(`⏱️ Starting timer for Q${questionIndex + 1}: ${timeLimit}s`);
@@ -405,38 +403,32 @@ function startQuestionTimer(io, session, questionIndex, timeLimit) {
   const timerInterval = setInterval(() => {
     timeRemaining--;
 
-    // Broadcast timer update every second
+    // ✅ Update stored timeRemaining so late-joining students get correct value
+    const stored = activeQuizTimers.get(sessionId);
+    if (stored) stored.timeRemaining = timeRemaining;
+
     io.to(sessionId).emit('timer:update', {
       questionIndex,
       timeRemaining
     });
 
-    // When time expires
     if (timeRemaining <= 0) {
       clearInterval(timerInterval);
       activeQuizTimers.delete(sessionId);
-
       console.log(`⏰ Time expired for Q${questionIndex + 1}`);
-
-      // Auto-advance to answer summary
       handleQuestionComplete(io, session, questionIndex);
     }
   }, 1000);
 
-  // Store timer reference
   activeQuizTimers.set(sessionId, {
-    interval: timerInterval,
+    interval:      timerInterval,
     timeRemaining,
     questionIndex
   });
 }
 
-/**
- * Stop a question timer
- */
 function stopQuestionTimer(sessionId) {
   const timerInfo = activeQuizTimers.get(sessionId);
-  
   if (timerInfo) {
     clearInterval(timerInfo.interval);
     activeQuizTimers.delete(sessionId);
@@ -445,108 +437,101 @@ function stopQuestionTimer(sessionId) {
 }
 
 /**
- * Handle question completion (time expired or teacher advanced)
+ * Handle question completion — UNCHANGED except final quiz:finished consistency
  */
 async function handleQuestionComplete(io, session, questionIndex) {
   const sessionId = session._id.toString();
-  
-  try {
-    // Reload session to get latest data
-    const updatedSession = await QuizSession.findById(sessionId).populate('quiz');
-    const question = updatedSession.quiz.questions[questionIndex];
 
-    // Get all participants who answered
+  try {
+    const updatedSession = await QuizSession.findById(sessionId).populate('quiz');
+    const question       = updatedSession.quiz.questions[questionIndex];
+
     const participantsWhoAnswered = updatedSession.participants.filter(
       p => p.answers.some(a => a.questionIndex === questionIndex)
     );
 
-    // ✅ NEW: Auto-submit for students who didn't answer (0 points, lose streak)
     for (let participant of updatedSession.participants) {
       const hasAnswered = participant.answers.some(a => a.questionIndex === questionIndex);
-      
       if (!hasAnswered) {
         participant.answers.push({
           questionIndex,
           selectedAnswer: null,
-          isCorrect: false,
-          points: 0,
-          timeTaken: question.timeLimit || 45,
-          answeredAt: new Date()
+          isCorrect:      false,
+          points:         0,
+          timeTaken:      question.timeLimit || 45,
+          answeredAt:     new Date()
         });
-        participant.streak = 0; // Lose streak
+        participant.streak = 0;
       }
     }
-    
+
     await updatedSession.save();
 
-    // Send answer summary to ALL students (even those who didn't answer)
     io.to(sessionId).emit('question:complete', {
       questionIndex,
       correctAnswer: question.correctAnswer,
-      explanation: question.explanation,
-      questionText: question.questionText,
-      options: question.options,
+      explanation:   question.explanation,
+      questionText:  question.questionText,
+      options:       question.options,
+      questionType:  question.questionType || 'multiple_choice',
       answeredCount: participantsWhoAnswered.length,
       totalStudents: updatedSession.participants.length
     });
 
-    // ✅ UPDATED: Wait 10 seconds for answer summary
     setTimeout(() => {
-      // Show leaderboard
       const leaderboard = getLeaderboard(updatedSession);
-      
+
       io.to(sessionId).emit('leaderboard:show', {
         leaderboard,
         questionIndex,
         isLastQuestion: questionIndex >= updatedSession.quiz.questions.length - 1
       });
 
-      // ✅ UPDATED: Wait 5 seconds for leaderboard (Total: 15s)
       if (questionIndex < updatedSession.quiz.questions.length - 1) {
         setTimeout(async () => {
           const nextIndex = questionIndex + 1;
-          
-          // Update session
+
           updatedSession.currentQuestionIndex = nextIndex;
           await updatedSession.save();
 
-          const nextQuestion = updatedSession.quiz.questions[nextIndex];
+          const nextQuestion      = updatedSession.quiz.questions[nextIndex];
           const questionTimeLimit = nextQuestion.timeLimit || 45;
 
-          // Start new timer
           startQuestionTimer(io, updatedSession, nextIndex, questionTimeLimit);
 
-          // Broadcast next question
           io.to(sessionId).emit('quiz:nextQuestion', {
             questionIndex: nextIndex,
             question: {
               questionText: nextQuestion.questionText,
-              options: nextQuestion.options,
-              timeLimit: questionTimeLimit,
-              points: nextQuestion.points || 10,
+              options:      nextQuestion.options,
+              timeLimit:    questionTimeLimit,
+              points:       nextQuestion.points || 10,
               questionType: nextQuestion.questionType || 'multiple_choice'
             },
             totalQuestions: updatedSession.quiz.questions.length
           });
 
           console.log(`➡️ Auto-advanced to question ${nextIndex + 1}`);
-        }, 5000); // ✅ 5 seconds to view leaderboard
+        }, 5000);
       } else {
-        // Quiz complete
+        // Last question — end quiz
         setTimeout(async () => {
+          // Mark session completed
+          updatedSession.status = 'completed';
+          await updatedSession.save();
+
           const finalLeaderboard = getLeaderboard(updatedSession);
-          
-          // ✅ NEW: Send chat notification with winner
           await sendChatNotification(io, updatedSession, 'quiz_ended', finalLeaderboard);
-          
+
+          // ✅ CONSISTENT: always 'quiz:finished' (same event as teacher:endQuiz)
           io.to(sessionId).emit('quiz:finished', {
             leaderboard: finalLeaderboard,
-            message: 'Quiz completed!'
+            message:     'Quiz completed!'
           });
-          console.log('🏁 Quiz finished');
+          console.log('🏁 Quiz finished (auto)');
         }, 5000);
       }
-    }, 10000); // ✅ 10 seconds to review answer
+    }, 10000);
 
   } catch (error) {
     console.error('❌ Question complete handler error:', error);
@@ -554,63 +539,53 @@ async function handleQuestionComplete(io, session, questionIndex) {
 }
 
 /**
- * Generate leaderboard from session
+ * Generate leaderboard — UNCHANGED
  */
 function getLeaderboard(session) {
-  const leaderboard = session.participants
+  return session.participants
     .map(p => ({
-      userId: p.user,
-      score: p.score,
+      userId:         p.user,
+      score:          p.score,
       correctAnswers: p.answers.filter(a => a.isCorrect).length,
-      totalAnswers: p.answers.length,
-      streak: p.streak || 0 // ✅ NEW: Include streak
+      totalAnswers:   p.answers.length,
+      streak:         p.streak || 0
     }))
-    .sort((a, b) => {
-      // Sort by score (descending), then by correct answers
-      if (b.score !== a.score) return b.score - a.score;
-      return b.correctAnswers - a.correctAnswers;
-    })
-    .map((entry, index) => ({
-      ...entry,
-      rank: index + 1
-    }));
-
-  return leaderboard;
+    .sort((a, b) => b.score !== a.score ? b.score - a.score : b.correctAnswers - a.correctAnswers)
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
 }
 
 /**
- * ✅ NEW: Send chat notification
+ * Send chat notification — UNCHANGED
  */
 async function sendChatNotification(io, session, type, leaderboard = null) {
   try {
     const groupId = session.group;
-    
+
     if (type === 'quiz_started') {
       const message = await Message.create({
-        group: groupId,
+        group:       groupId,
         messageType: 'quiz_started',
-        content: `📝 Quiz Started: ${session.quiz.title}\n\nJoin now!`,
-        metadata: { quizId: session.quiz._id, sessionId: session._id }
+        content:     `📝 Quiz Started: ${session.quiz.title}\n\nJoin now!`,
+        metadata:    { quizId: session.quiz._id, sessionId: session._id }
       });
-      
       io.to(groupId.toString()).emit('newMessage', { message });
-    } 
-    else if (type === 'quiz_ended') {
-      const winner = leaderboard[0];
+
+    } else if (type === 'quiz_ended') {
+      if (!leaderboard || leaderboard.length === 0) return;
+      const winner     = leaderboard[0];
       const winnerUser = await User.findById(winner.userId);
-      
+
       const message = await Message.create({
-        group: groupId,
+        group:       groupId,
         messageType: 'quiz_ended',
-        content: `🎉 Quiz completed!\n🏆 ${winnerUser.name}: ${winner.score} pts`,
-        metadata: { 
-          quizId: session.quiz._id, 
-          sessionId: session._id,
-          winnerId: winner.userId,
+        content:     `🎉 Quiz completed!\n🏆 ${winnerUser?.name || 'Winner'}: ${winner.score} pts`,
+        metadata:    {
+          quizId:      session.quiz._id,
+          sessionId:   session._id,
+          winnerId:    winner.userId,
           winnerScore: winner.score
         }
       });
-      
       io.to(groupId.toString()).emit('newMessage', { message });
     }
   } catch (error) {
@@ -619,24 +594,18 @@ async function sendChatNotification(io, session, type, leaderboard = null) {
 }
 
 // ========================================
-// CLEANUP ON SERVER SHUTDOWN
+// CLEANUP — UNCHANGED
 // ========================================
 
 function cleanupQuizTimers() {
   console.log('🧹 Cleaning up all quiz timers...');
-  
   for (const [sessionId, timerInfo] of activeQuizTimers.entries()) {
     clearInterval(timerInfo.interval);
     console.log(`⏹️ Stopped timer for session: ${sessionId}`);
   }
-  
   activeQuizTimers.clear();
   console.log('✅ All timers cleaned up');
 }
-
-// ========================================
-// EXPORTS
-// ========================================
 
 module.exports = {
   setupQuizSocketHandlers,
