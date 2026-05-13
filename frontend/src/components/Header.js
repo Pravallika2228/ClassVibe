@@ -1,17 +1,36 @@
 // frontend/src/components/Header.js
-// ✅ CHANGES: Removed "+ Create Instant", "📅 Schedule", "🎮 Create Quiz" buttons
-//             (dashboard handles these via sidebar and Instructor Hub)
-// Everything else — Analytics, End Session, Leave Meeting, Notification Bell, Menu — IDENTICAL
+// ✅ UI REDESIGN — Visily-style clean two-row header
+//
+// WHY this structure:
+//   Teacher needs: LIVE badge, session name, start-time, View PIN & QR,
+//                  Live Analytics, End Session, bell, ⋮
+//   Student needs: chat icon, session name, SESSION ACTIVE • N, View PIN,
+//                  bell, ⋮ (no analytics, no end session)
+//   Both roles look different at a glance → no confusion about who has control
+//
+// STRUCTURE:
+//   Row 1 — brand bar:  ClassVibe logo  |  [bell + ⋮ when NOT in session]
+//   Row 2 — session bar (only when groupName exists):
+//            LEFT  → role-specific session identity
+//            RIGHT → role-specific action buttons
+//
+// ALL EXISTING PROPS UNCHANGED — new optional props gracefully degrade:
+//   participantCount  (student sub-header "• N PARTICIPANTS")
+//   sessionStartedAt  (teacher sub-header "Session started X ago")
+//   onViewPin         (open PIN/QR modal — pass from App.js)
+//
+// NOTE: api.js needs NO changes — getGroupDetails already returns pin, qrCode, createdAt
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import NotificationBell from './NotificationBell';
 
 const Header = ({
+  // ── Existing props (all kept, nothing removed) ──
   onEndSession,
   onLeaveMeeting,
-  onCreateGroup,
-  onOpenSchedule,
-  onOpenQuiz,
+  onCreateGroup,      // kept for backward compat, not shown in header
+  onOpenSchedule,     // kept for backward compat, not shown in header
+  onOpenQuiz,         // kept for backward compat, not shown in header
   onOpenAnalytics,
   onToggleSidebar,
   isAdmin,
@@ -19,181 +38,396 @@ const Header = ({
   userRole,
   onBack,
   socket,
+  // ── New optional props ──
+  participantCount,   // number  — student row shows "• N PARTICIPANTS"
+  sessionStartedAt,   // Date    — teacher row shows "Session started X ago"
+  onViewPin,          // fn      — opens PIN / QR modal; if omitted, button hidden
 }) => {
+
+  // ── "Session started X ago" — updates every 60 s ──────────────────────
+  const [timeAgo, setTimeAgo] = useState('');
+
+  useEffect(() => {
+    if (!sessionStartedAt) return;
+    const calc = () => {
+      const mins = Math.floor((Date.now() - new Date(sessionStartedAt)) / 60000);
+      if (mins < 1)   return setTimeAgo('just now');
+      if (mins < 60)  return setTimeAgo(`${mins} minute${mins !== 1 ? 's' : ''} ago`);
+      const hrs = Math.floor(mins / 60);
+      setTimeAgo(`${hrs} hour${hrs !== 1 ? 's' : ''} ago`);
+    };
+    calc();
+    const id = setInterval(calc, 60000);
+    return () => clearInterval(id);
+  }, [sessionStartedAt]);
+
+  const isTeacher = userRole === 'teacher';
+
+  // ════════════════════════════════════════════════════════════════════════
   return (
-    <header style={styles.header}>
-      <div style={styles.left}>
-        <div style={styles.titleWrap}>
-          <h2 style={styles.title}>ClassVibe</h2>
+    <header style={S.header}>
 
-          {onBack && (
-            <button onClick={onBack} style={styles.backBtn}>
-              Back to Home
-            </button>
+      {/* ═══ ROW 1 — BRAND BAR ════════════════════════════════════════════ */}
+      <div style={S.brandRow}>
+        <div style={S.brandLeft}>
+
+          {/* ClassVibe wordmark */}
+          <span style={S.logo}>ClassVibe</span>
+
+          {/* Back button — only when explicitly provided */}
+          {onBack && !groupName && (
+            <button onClick={onBack} style={S.backBtn}>← Back</button>
           )}
+        </div>
 
-          {groupName && (
-            <span style={styles.groupName}>— {groupName}</span>
+        <div style={S.brandRight}>
+          {/* Bell + hamburger only when NOT in a session (in-session controls
+              move to the session bar below for cleaner separation) */}
+          {!groupName && (
+            <>
+              {socket && <NotificationBell socket={socket} />}
+              <button onClick={onToggleSidebar} style={S.hamburgerBtn} aria-label="Menu">
+                <span style={S.hLine} />
+                <span style={S.hLine} />
+                <span style={S.hLine} />
+              </button>
+            </>
           )}
         </div>
       </div>
 
-      <div style={styles.right}>
-        {userRole === "teacher" && (
-          <>
-            {/* ✅ REMOVED: "+ Create Instant" button */}
-            {/* ✅ REMOVED: "📅 Schedule" button */}
-            {/* ✅ REMOVED: "🎮 Create Quiz" button */}
+      {/* ═══ ROW 2 — SESSION SUB-HEADER (only when in a session) ══════════ */}
+      {groupName && (
+        <div style={S.sessionBar}>
 
-            {/* Analytics — ONLY when teacher is IN a session — UNCHANGED */}
-            {groupName && onOpenAnalytics && (
+          {/* ── LEFT: session identity ── */}
+          <div style={S.sessionLeft}>
+            {isTeacher ? (
+              /* TEACHER: LIVE badge + name + started-ago */
+              <>
+                <span style={S.liveBadge}>LIVE</span>
+                <div style={S.sessionInfo}>
+                  <span style={S.sessionName}>{groupName}</span>
+                  {timeAgo && (
+                    <span style={S.sessionMeta}>Session started {timeAgo}</span>
+                  )}
+                </div>
+              </>
+            ) : (
+              /* STUDENT: chat icon + name + SESSION ACTIVE line */
+              <>
+                <div style={S.chatIconBox}>
+                  <span style={{ fontSize: 15 }}>💬</span>
+                </div>
+                <div style={S.sessionInfo}>
+                  <span style={S.sessionName}>{groupName}</span>
+                  <span style={S.sessionMeta}>
+                    SESSION ACTIVE
+                    {participantCount ? ` • ${participantCount} PARTICIPANTS` : ''}
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* ── RIGHT: action buttons ── */}
+          <div style={S.sessionRight}>
+
+            {/* View Session PIN & QR  (teacher) / View Session PIN (student) */}
+            {onViewPin && (
               <button
-                onClick={onOpenAnalytics}
-                style={styles.analyticsButton}
-                onMouseEnter={(e) => (e.target.style.backgroundColor = "#e68900")}
-                onMouseLeave={(e) => (e.target.style.backgroundColor = "#FFA500")}
+                onClick={onViewPin}
+                style={S.pinBtn}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
               >
-                📊 Analytics
+                {isTeacher ? 'View Session PIN & QR' : 'View Session PIN'}
               </button>
             )}
-          </>
-        )}
 
-        {/* Admin End Session — UNCHANGED */}
-        {isAdmin && groupName && (
-          <button
-            onClick={onEndSession}
-            style={styles.endButton}
-            onMouseEnter={(e) => (e.target.style.backgroundColor = "#c82333")}
-            onMouseLeave={(e) => (e.target.style.backgroundColor = "#dc3545")}
-          >
-            End Session
-          </button>
-        )}
+            {/* Live Analytics — teacher only */}
+            {isTeacher && onOpenAnalytics && (
+              <button
+                onClick={onOpenAnalytics}
+                style={S.analyticsBtn}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
+              >
+                📊 Live Analytics
+              </button>
+            )}
 
-        {/* Student Leave Meeting — UNCHANGED */}
-        {!isAdmin && onLeaveMeeting && groupName && (
-          <button
-            onClick={onLeaveMeeting}
-            style={styles.leaveButton}
-            onMouseEnter={(e) => (e.target.style.backgroundColor = "#e68900")}
-            onMouseLeave={(e) => (e.target.style.backgroundColor = "#ff9800")}
-          >
-            Leave Meeting
-          </button>
-        )}
+            {/* End Session — admin/teacher only */}
+            {isAdmin && onEndSession && (
+              <button
+                onClick={onEndSession}
+                style={S.endBtn}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#dc2626'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ef4444'}
+              >
+                🔴 End Session
+              </button>
+            )}
 
-        {/* Notification Bell — UNCHANGED */}
-        {socket && <NotificationBell socket={socket} />}
+            {/* Leave Meeting — student only */}
+            {!isAdmin && onLeaveMeeting && groupName && (
+              <button
+                onClick={onLeaveMeeting}
+                style={S.leaveBtn}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#ea580c'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#f97316'}
+              >
+                Leave
+              </button>
+            )}
 
-        {/* Hamburger Menu — UNCHANGED */}
-        <button onClick={onToggleSidebar} style={styles.menuButton}>
-          <div style={styles.menuLine} />
-          <div style={styles.menuLine} />
-          <div style={styles.menuLine} />
-        </button>
-      </div>
+            {/* Notification Bell */}
+            {socket && <NotificationBell socket={socket} />}
+
+            {/* Three-dot menu — opens Sidebar */}
+            <button
+              onClick={onToggleSidebar}
+              style={S.moreBtn}
+              aria-label="More options"
+              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
+            >
+              ⋮
+            </button>
+
+          </div>
+        </div>
+      )}
     </header>
   );
 };
 
-const styles = {
+// ══════════════════════════════════════════════════════════════════════════
+//  STYLES
+// ══════════════════════════════════════════════════════════════════════════
+const S = {
+
+  // Outer header wrapper
   header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "12px 18px",
-    backgroundColor: "#075E54",
-    color: "white",
-    boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
-    position: "sticky",
+    position: 'sticky',
     top: 0,
     zIndex: 1000,
+    backgroundColor: '#ffffff',
+    boxShadow: '0 1px 0 #e2e8f0, 0 2px 8px rgba(0,0,0,0.04)',
   },
-  left: {
-    display: "flex",
-    alignItems: "center",
+
+  // ── Brand row ──────────────────────────────────────────────────────────
+  brandRow: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 20px',
+    borderBottom: '1px solid #f1f5f9',
+    minHeight: 52,
   },
-  titleWrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
+  brandLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
   },
-  title: {
-    margin: 0,
-    fontSize: "20px",
-    fontWeight: 700,
-    color: "white",
+  logo: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#0f172a',
+    letterSpacing: '-0.5px',
+    userSelect: 'none',
   },
   backBtn: {
-    background: "#128C7E",
-    color: "white",
-    border: "none",
-    padding: "6px 10px",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontWeight: 600,
-    fontSize: "13px",
+    padding: '5px 12px',
+    fontSize: 13,
+    fontWeight: '600',
+    backgroundColor: '#f1f5f9',
+    color: '#475569',
+    border: '1px solid #e2e8f0',
+    borderRadius: 6,
+    cursor: 'pointer',
   },
-  groupName: {
-    fontSize: "14px",
-    color: "#DCF8C6",
-    fontStyle: "italic",
-    fontWeight: 500,
+  brandRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
   },
-  right: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
+  // Hamburger (shown only when not in session)
+  hamburgerBtn: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-around',
+    width: 32,
+    height: 28,
+    backgroundColor: 'transparent',
+    border: 'none',
+    cursor: 'pointer',
+    padding: 2,
+    gap: 4,
   },
-  analyticsButton: {
-    padding: "8px 14px",
-    fontSize: "14px",
-    fontWeight: 700,
-    backgroundColor: "#FFA500",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    transition: "background-color 0.2s",
+  hLine: {
+    display: 'block',
+    width: '100%',
+    height: 2,
+    backgroundColor: '#64748b',
+    borderRadius: 1,
   },
-  endButton: {
-    padding: "8px 14px",
-    fontSize: "14px",
-    fontWeight: 700,
-    backgroundColor: "#dc3545",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    transition: "background-color 0.2s",
+
+  // ── Session sub-header ─────────────────────────────────────────────────
+  sessionBar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '8px 20px',
+    borderBottom: '1px solid #e2e8f0',
+    backgroundColor: '#ffffff',
+    flexWrap: 'wrap',
+    gap: '8px 12px',
+    minHeight: 52,
   },
-  leaveButton: {
-    padding: "8px 14px",
-    fontSize: "14px",
-    fontWeight: 700,
-    backgroundColor: "#ff9800",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    transition: "background-color 0.2s",
+
+  // Left: identity block
+  sessionLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+    minWidth: 0, // prevent flex overflow
   },
-  menuButton: {
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-around",
-    width: "36px",
-    height: "30px",
-    backgroundColor: "transparent",
-    border: "none",
-    cursor: "pointer",
+
+  // LIVE badge (teacher)
+  liveBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '3px 8px',
+    backgroundColor: '#22c55e',
+    color: '#ffffff',
+    borderRadius: 5,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: '0.8px',
+    flexShrink: 0,
+    lineHeight: 1.6,
   },
-  menuLine: {
-    width: "100%",
-    height: "3px",
-    backgroundColor: "white",
-    borderRadius: "2px",
+
+  // Chat icon box (student)
+  chatIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#f1f5f9',
+    border: '1px solid #e2e8f0',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+
+  // Session name + meta
+  sessionInfo: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 1,
+    minWidth: 0,
+    overflow: 'hidden',
+  },
+  sessionName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0f172a',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  sessionMeta: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#64748b',
+    letterSpacing: '0.3px',
+    textTransform: 'uppercase',
+  },
+
+  // Right: action buttons
+  sessionRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+    flexWrap: 'wrap',
+  },
+
+  // View PIN button (outlined, both roles)
+  pinBtn: {
+    padding: '7px 13px',
+    fontSize: 12,
+    fontWeight: '500',
+    backgroundColor: '#ffffff',
+    color: '#374151',
+    border: '1px solid #e2e8f0',
+    borderRadius: 7,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    transition: 'background 0.15s',
+  },
+
+  // Live Analytics button (teacher only, outlined)
+  analyticsBtn: {
+    padding: '7px 13px',
+    fontSize: 12,
+    fontWeight: '500',
+    backgroundColor: '#ffffff',
+    color: '#374151',
+    border: '1px solid #e2e8f0',
+    borderRadius: 7,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    transition: 'background 0.15s',
+  },
+
+  // End Session button (red solid, teacher/admin)
+  endBtn: {
+    padding: '7px 13px',
+    fontSize: 12,
+    fontWeight: '700',
+    backgroundColor: '#ef4444',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: 7,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    transition: 'background 0.15s',
+  },
+
+  // Leave Meeting button (orange, student)
+  leaveBtn: {
+    padding: '7px 13px',
+    fontSize: 12,
+    fontWeight: '600',
+    backgroundColor: '#f97316',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: 7,
+    cursor: 'pointer',
+    transition: 'background 0.15s',
+  },
+
+  // ⋮ Three-dot menu
+  moreBtn: {
+    width: 34,
+    height: 34,
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#475569',
+    backgroundColor: 'transparent',
+    border: '1px solid #e2e8f0',
+    borderRadius: 8,
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    lineHeight: 1,
+    transition: 'background 0.15s',
+    flexShrink: 0,
   },
 };
 
