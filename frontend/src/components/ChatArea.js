@@ -1,13 +1,15 @@
 // src/components/ChatArea.js
-// ✅ UI REDESIGN — Visily-style classroom chat
-// Changes from previous version:
-//   1. All messages left-aligned (teacher + student feed style, not WhatsApp style)
-//   2. Message meta (name + Teacher/Student badge + timestamp) displayed ABOVE the bubble
-//   3. Own messages get a light-blue tinted bubble; others get white
-//   4. Clean white background — removed WhatsApp green bar and tile pattern
-//   5. Teacher badge shown on all messages from users with role 'teacher'
-//   6. Leaderboard collapsible bar — UNCHANGED (already working)
-//   7. ALL existing logic (polls, quiz, files, context menu, fullscreen, PDF) — UNTOUCHED
+// ✅ CORRECTED v3 — All issues fixed
+//
+// FIXES vs previous version:
+//   1. Own messages  → RIGHT-aligned (flex-end), indigo bubble, no name shown, ✓✓ + time in footer
+//   2. Other messages→ LEFT-aligned (flex-start), avatar + name/badge/time ABOVE bubble
+//   3. Leaderboard collapsed = ONLY the ▼ arrow row (no dark bar). Click → full bar slides in
+//   4. userRole prop added ('teacher' | 'student') — teacher own bubble = indigo, student = teal
+//   5. ALL existing logic preserved (polls, quiz, files, context menu, fullscreen, PDF)
+//
+// HOW TO USE IN App.js:
+//   <ChatArea ... userRole={currentUser?.role} />
 
 import React, { useRef, useEffect, useState } from 'react';
 import socket from '../socket';
@@ -18,222 +20,197 @@ const ChatArea = ({
   currentGroup,
   typingUsers,
   onMessageEdited,
-  onMessageDeleted
+  onMessageDeleted,
+  userRole,          // 'teacher' | 'student'  ← pass from App.js
 }) => {
-  const messagesEndRef          = useRef(null);
-  const messagesContainerRef    = useRef(null);
+  const messagesEndRef       = useRef(null);
+  const messagesContainerRef = useRef(null);
+
   const [showScrollButton, setShowScrollButton] = useState(false);
-  const [contextMenu,       setContextMenu]     = useState(null);
-  const [searchQuery,       setSearchQuery]     = useState('');
-  const [editingMessageId,  setEditingMessageId] = useState(null);
-  const [editText,          setEditText]         = useState('');
-  const [fullscreenMedia,   setFullscreenMedia]  = useState(null);
-  const [zoomLevel,         setZoomLevel]        = useState(1);
-  const [pdfViewer,         setPdfViewer]        = useState(null);
+  const [contextMenu,      setContextMenu]      = useState(null);
+  const [searchQuery,      setSearchQuery]      = useState('');
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editText,         setEditText]         = useState('');
+  const [fullscreenMedia,  setFullscreenMedia]  = useState(null);
+  const [zoomLevel,        setZoomLevel]        = useState(1);
+  const [pdfViewer,        setPdfViewer]        = useState(null);
 
-  // Leaderboard bar state — UNCHANGED
+  // ── Leaderboard ─────────────────────────────────────────────────────────
+  // null       = no quiz yet  → render nothing
+  // array data = quiz done    → collapsed=true shows ONLY arrow; false shows full bar
   const [leaderboardBar, setLeaderboardBar] = useState(null);
-  const [lbCollapsed,    setLbCollapsed]    = useState(false);
+  const [lbCollapsed,    setLbCollapsed]    = useState(true); // start collapsed (arrow only)
 
-  // ── Leaderboard socket listeners — UNCHANGED ──
   useEffect(() => {
-    const handleLeaderboard = (data) => {
-      if (data?.leaderboard && data.leaderboard.length > 0) {
+    const onLeaderboard = (data) => {
+      if (data?.leaderboard?.length > 0) {
         setLeaderboardBar(data.leaderboard.slice(0, 3));
-        setLbCollapsed(false);
+        setLbCollapsed(false); // auto-expand when new data arrives
       }
     };
-    socket.on('leaderboard:show', handleLeaderboard);
-    socket.on('quiz:finished',    handleLeaderboard);
+    socket.on('leaderboard:show', onLeaderboard);
+    socket.on('quiz:finished',    onLeaderboard);
     return () => {
-      socket.off('leaderboard:show', handleLeaderboard);
-      socket.off('quiz:finished',    handleLeaderboard);
+      socket.off('leaderboard:show', onLeaderboard);
+      socket.off('quiz:finished',    onLeaderboard);
     };
   }, []);
 
-  useEffect(() => { scrollToBottom(); }, [messages]);
-
+  // ── Message edit / delete ────────────────────────────────────────────────
   useEffect(() => {
-    const handleMessageEdited = (editedMessage) => {
-      if (typeof onMessageEdited === 'function') onMessageEdited(editedMessage);
-      if (editingMessageId === editedMessage._id) { setEditingMessageId(null); setEditText(''); }
+    const onEdited = (edited) => {
+      if (typeof onMessageEdited === 'function') onMessageEdited(edited);
+      if (editingMessageId === edited._id) { setEditingMessageId(null); setEditText(''); }
     };
-    const handleMessageDeleted = (data) => {
+    const onDeleted = (data) => {
       if (typeof onMessageDeleted === 'function') onMessageDeleted(data.messageId);
     };
-    socket.on('messageEdited',  handleMessageEdited);
-    socket.on('messageDeleted', handleMessageDeleted);
+    socket.on('messageEdited',  onEdited);
+    socket.on('messageDeleted', onDeleted);
     return () => {
-      socket.off('messageEdited',  handleMessageEdited);
-      socket.off('messageDeleted', handleMessageDeleted);
+      socket.off('messageEdited',  onEdited);
+      socket.off('messageDeleted', onDeleted);
     };
   }, [onMessageEdited, onMessageDeleted, editingMessageId]);
 
+  useEffect(() => { scrollToBottom(); }, [messages]);
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
   const handleScroll = () => {
-    const container = messagesContainerRef.current;
-    if (container) {
-      const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 100;
-      setShowScrollButton(!isNearBottom);
-    }
+    const c = messagesContainerRef.current;
+    if (c) setShowScrollButton(c.scrollHeight - c.scrollTop - c.clientHeight > 100);
   };
 
-  const scrollToBottom = (smooth = true) => {
+  const scrollToBottom = (smooth = true) =>
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto' });
+
+  const formatTime = (ts) => {
+    const d = new Date(ts), now = new Date();
+    return d.toDateString() === now.toDateString()
+      ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
-  const formatTime = (timestamp) => {
-    const date = new Date(timestamp);
-    const now  = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-    if (isToday) return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const getDateLabel = (ts) => {
+    const d = new Date(ts), now = new Date();
+    const yesterday = new Date(now); yesterday.setDate(yesterday.getDate() - 1);
+    if (d.toDateString() === now.toDateString())       return 'Today';
+    if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
   };
 
-  const getDateSeparator = (timestamp) => {
-    const date      = new Date(timestamp);
-    const now       = new Date();
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    if (date.toDateString() === now.toDateString())       return 'Today';
-    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-    return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  };
-
-  const needsDateSeparator = (currentMsg, previousMsg) => {
-    if (!previousMsg) return true;
-    return new Date(currentMsg.createdAt).toDateString() !== new Date(previousMsg.createdAt).toDateString();
-  };
+  const needsDateSep = (cur, prev) =>
+    !prev || new Date(cur.createdAt).toDateString() !== new Date(prev.createdAt).toDateString();
 
   const getInitials    = (u) => u?.substring(0, 2).toUpperCase() || '??';
   const getAvatarColor = (u) => {
-    const colors = ['#6366f1','#ec4899','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ef4444','#14b8a6'];
-    return colors[(u?.charCodeAt(0) || 0) % colors.length];
+    const c = ['#6366f1','#ec4899','#f59e0b','#10b981','#3b82f6','#8b5cf6','#ef4444','#14b8a6'];
+    return c[(u?.charCodeAt(0) || 0) % c.length];
   };
 
-  const handleContextMenu = (e, message) => {
+  // Own bubble color differs by role (subtle but distinguishable)
+  const ownBubbleColor = userRole === 'teacher'
+    ? { bg: '#eef2ff', border: '#c7d2fe', tick: '#6366f1' }  // indigo tint for teacher
+    : { bg: '#f0fdf4', border: '#bbf7d0', tick: '#10b981' }; // green tint for student
+
+  // ── Context menu ──────────────────────────────────────────────────────────
+  const handleContextMenu = (e, msg) => {
     e.preventDefault();
-    if (message.isDeleted) return;
-    setContextMenu({ x: e.clientX, y: e.clientY, message, isOwn: message.sender?._id === currentUserId });
+    if (msg.isDeleted) return;
+    setContextMenu({ x: e.clientX, y: e.clientY, message: msg, isOwn: msg.sender?._id === currentUserId });
   };
-
   useEffect(() => {
-    const handleClick = () => setContextMenu(null);
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
+    const dismiss = () => setContextMenu(null);
+    document.addEventListener('click', dismiss);
+    return () => document.removeEventListener('click', dismiss);
   }, []);
 
-  const copyMessage = (text) => {
-    if (!text) { alert('No text to copy'); return; }
-    navigator.clipboard.writeText(text)
-      .then(() => { setContextMenu(null); alert('Message copied!'); })
-      .catch(() => alert('Failed to copy'));
+  const copyMsg   = (text) => {
+    if (!text) { alert('Nothing to copy'); return; }
+    navigator.clipboard.writeText(text).then(() => { setContextMenu(null); alert('Copied!'); }).catch(() => alert('Copy failed'));
   };
-
-  const startEditMessage = (message) => { setEditingMessageId(message._id); setEditText(message.content); setContextMenu(null); };
-  const saveEditMessage  = () => {
-    if (!editText.trim()) { alert('Message cannot be empty'); return; }
+  const startEdit = (msg) => { setEditingMessageId(msg._id); setEditText(msg.content); setContextMenu(null); };
+  const saveEdit  = ()    => {
+    if (!editText.trim()) { alert('Cannot be empty'); return; }
     socket.emit('editMessage', { messageId: editingMessageId, newContent: editText.trim() });
   };
-  const cancelEdit = () => { setEditingMessageId(null); setEditText(''); };
-  const deleteMessage = (messageId) => {
-    if (window.confirm('Delete this message?')) { socket.emit('deleteMessage', { messageId }); setContextMenu(null); }
+  const cancelEdit  = ()  => { setEditingMessageId(null); setEditText(''); };
+  const deleteMsg   = (id) => {
+    if (window.confirm('Delete this message?')) { socket.emit('deleteMessage', { messageId: id }); setContextMenu(null); }
   };
 
-  // ── Poll rendering — UNCHANGED ──
-  const handlePollVote = (messageId, optionIndex) => {
+  // ── Poll — UNCHANGED ─────────────────────────────────────────────────────
+  const handlePollVote = (messageId, optionIndex) =>
     socket.emit('votePoll', { messageId, optionIndex, groupId: currentGroup?._id || currentGroup?.id });
-  };
 
   const renderPoll = (message) => {
-    if (!message.pollOptions || message.pollOptions.length === 0)
-      return <div style={styles.pollError}>Poll data unavailable</div>;
-    const totalVotes    = message.pollOptions.reduce((sum, opt) => sum + (opt.votes?.length || 0), 0);
-    const userVoteIndex = message.pollOptions.findIndex(opt => opt.votes?.some(v => String(v) === String(currentUserId)));
-    const userHasVoted  = userVoteIndex !== -1;
+    if (!message.pollOptions?.length) return <div style={S.pollError}>Poll data unavailable</div>;
+    const total     = message.pollOptions.reduce((s, o) => s + (o.votes?.length || 0), 0);
+    const uvi       = message.pollOptions.findIndex(o => o.votes?.some(v => String(v) === String(currentUserId)));
+    const voted     = uvi !== -1;
     return (
-      <div style={styles.pollContainer}>
-        <div style={styles.pollHeader}>
-          <span style={styles.pollIcon}>📊</span>
-          <span style={styles.pollQuestion}>{message.content}</span>
-        </div>
-        <div style={styles.pollOptions}>
-          {message.pollOptions.map((option, index) => {
-            const votes      = option.votes?.length || 0;
-            const percentage = totalVotes > 0 ? Math.round((votes / totalVotes) * 100) : 0;
-            const isUserVote = index === userVoteIndex;
+      <div style={S.pollContainer}>
+        <div style={S.pollHeader}><span>📊</span><span style={S.pollQuestion}>{message.content}</span></div>
+        <div style={S.pollOptions}>
+          {message.pollOptions.map((opt, i) => {
+            const votes = opt.votes?.length || 0;
+            const pct   = total > 0 ? Math.round((votes / total) * 100) : 0;
+            const mine  = i === uvi;
             return (
-              <div key={index} style={styles.pollOptionWrapper}>
-                {userHasVoted ? (
-                  <div style={{ ...styles.pollResult, borderColor: isUserVote ? '#6366f1' : '#e2e8f0', borderWidth: isUserVote ? '2px' : '1px' }}>
-                    <div style={styles.pollResultTop}>
-                      <span style={styles.pollOptionText}>{option.text || option}</span>
-                      <span style={styles.pollPercentage}>{percentage}%</span>
-                    </div>
-                    <div style={styles.pollProgressBar}>
-                      <div style={{ ...styles.pollProgressFill, width: `${percentage}%`, backgroundColor: isUserVote ? '#6366f1' : '#94a3b8' }} />
-                    </div>
-                    <div style={styles.pollVoteCount}>{votes} {votes === 1 ? 'vote' : 'votes'}{isUserVote && <span style={styles.checkmark}> ✓</span>}</div>
+              <div key={i}>
+                {voted ? (
+                  <div style={{ ...S.pollResult, borderColor: mine ? '#6366f1' : '#e2e8f0', borderWidth: mine ? '2px' : '1px' }}>
+                    <div style={S.pollResultTop}><span style={S.pollOptText}>{opt.text || opt}</span><span style={S.pollPct}>{pct}%</span></div>
+                    <div style={S.pollBar}><div style={{ ...S.pollFill, width: `${pct}%`, backgroundColor: mine ? '#6366f1' : '#94a3b8' }} /></div>
+                    <div style={S.pollVotes}>{votes} vote{votes !== 1 ? 's' : ''}{mine && <span style={{ color: '#6366f1', fontWeight: 'bold' }}> ✓</span>}</div>
                   </div>
                 ) : (
-                  <button onClick={() => handlePollVote(message._id, index)} style={styles.pollButton}>
-                    {option.text || option}
-                  </button>
+                  <button onClick={() => handlePollVote(message._id, i)} style={S.pollBtn}>{opt.text || opt}</button>
                 )}
               </div>
             );
           })}
         </div>
-        <div style={styles.pollFooter}>{totalVotes} {totalVotes === 1 ? 'vote' : 'votes'}</div>
+        <div style={S.pollFooter}>{total} vote{total !== 1 ? 's' : ''}</div>
       </div>
     );
   };
 
-  // ── Quiz notification rendering — UNCHANGED ──
+  // ── Quiz notification — UNCHANGED ────────────────────────────────────────
   const handleJoinQuiz = (sessionId) => {
     socket.emit('student:joinQuiz', { sessionId });
     window.dispatchEvent(new CustomEvent('openWaitingRoom', { detail: { sessionId } }));
   };
 
   const renderQuizNotification = (message) => {
-    const isQuizStarted = message.messageType === 'quiz_started';
-    const isQuizEnded   = message.messageType === 'quiz_ended';
-    if (!isQuizStarted && !isQuizEnded) return null;
+    const started = message.messageType === 'quiz_started';
+    const ended   = message.messageType === 'quiz_ended';
+    if (!started && !ended) return null;
     const { sessionId, quizTitle, winnerName, winnerScore } = message.metadata || {};
     return (
-      <div style={additionalStyles.quizNotificationContainer}>
-        {isQuizStarted && (
+      <div style={S.quizBox}>
+        {started && (
           <>
-            <div style={styles.quizNotificationHeader}>
-              <span style={styles.quizIcon}>📝</span>
-              <span style={styles.quizNotificationTitle}>Quiz Started!</span>
+            <div style={S.quizHeader}><span style={{ fontSize: 24 }}>📝</span><span style={S.quizHeadText}>Quiz Started!</span></div>
+            <div style={S.quizBody}>
+              <div style={S.quizName}>{quizTitle || 'New Quiz'}</div>
+              <div style={S.quizMsg}>Join now to participate! 🎮</div>
             </div>
-            <div style={styles.quizNotificationContent}>
-              <div style={styles.quizTitle}>{quizTitle || 'New Quiz'}</div>
-              <div style={styles.quizMessage}>Join now to participate! 🎮</div>
-            </div>
-            <button onClick={() => sessionId && handleJoinQuiz(sessionId)} style={styles.joinQuizBtn}>
-              Join Quiz
-            </button>
+            <button onClick={() => sessionId && handleJoinQuiz(sessionId)} style={S.joinBtn}>Join Quiz</button>
           </>
         )}
-        {isQuizEnded && (
+        {ended && (
           <>
-            <div style={styles.quizNotificationHeader}>
-              <span style={styles.quizIcon}>🎉</span>
-              <span style={styles.quizNotificationTitle}>Quiz Completed!</span>
-            </div>
-            <div style={styles.quizNotificationContent}>
-              <div style={styles.quizTitle}>{quizTitle || 'Quiz'}</div>
+            <div style={S.quizHeader}><span style={{ fontSize: 24 }}>🎉</span><span style={S.quizHeadText}>Quiz Completed!</span></div>
+            <div style={S.quizBody}>
+              <div style={S.quizName}>{quizTitle || 'Quiz'}</div>
               {winnerName && (
-                <div style={styles.winnerInfo}>
-                  <div style={styles.winnerBadge}>🏆</div>
-                  <div>
-                    <div style={styles.winnerName}>Top Scorer: {winnerName}</div>
-                    <div style={styles.winnerScore}>{winnerScore} points</div>
-                  </div>
+                <div style={S.winnerRow}>
+                  <span style={{ fontSize: 30 }}>🏆</span>
+                  <div><div style={S.winnerName}>Top Scorer: {winnerName}</div><div style={S.winnerPts}>{winnerScore} points</div></div>
                 </div>
               )}
-              <div style={styles.quizMessage}>Check your results in the quiz section</div>
+              <div style={S.quizMsg}>Check your results in the quiz section</div>
             </div>
           </>
         )}
@@ -241,264 +218,304 @@ const ChatArea = ({
     );
   };
 
-  // ── File attachment rendering — UNCHANGED ──
-  const openFullscreen  = (fileUrl, fileType, fileName) => { setFullscreenMedia({ fileUrl, fileType, fileName }); setZoomLevel(1); };
-  const closeFullscreen = () => { setFullscreenMedia(null); setZoomLevel(1); };
-  const downloadFile    = (fileUrl, fileName) => { const a = document.createElement('a'); a.href = fileUrl; a.download = fileName || 'download'; a.click(); };
+  // ── File attachment — UNCHANGED ──────────────────────────────────────────
+  const openFullscreen  = (u, t, n) => { setFullscreenMedia({ fileUrl: u, fileType: t, fileName: n }); setZoomLevel(1); };
+  const closeFullscreen = ()         => { setFullscreenMedia(null); setZoomLevel(1); };
+  const downloadFile    = (u, n)     => { const a = document.createElement('a'); a.href = u; a.download = n || 'download'; a.click(); };
   const zoomIn  = () => setZoomLevel(p => Math.min(p + 0.25, 3));
   const zoomOut = () => setZoomLevel(p => Math.max(p - 0.25, 0.5));
-  const openPdfViewer  = (fileUrl, fileName) => setPdfViewer({ fileUrl, fileName });
-  const closePdfViewer = () => setPdfViewer(null);
+  const openPdf  = (u, n) => setPdfViewer({ fileUrl: u, fileName: n });
+  const closePdf = ()     => setPdfViewer(null);
 
-  const renderFileAttachment = (message) => {
+  const renderFile = (message) => {
     if (message.messageType !== 'file' || !message.fileUrl) return null;
-    const fileType = message.fileType || '';
-    const fileUrl  = message.fileUrl.startsWith('http') ? message.fileUrl : `https://classvibe-backend.onrender.com${message.fileUrl}`;
-    if (fileType.startsWith('image/'))
-      return <img src={fileUrl} alt={message.fileName || 'Image'} style={styles.imageAttachment} onClick={() => openFullscreen(fileUrl, fileType, message.fileName)} />;
-    if (fileType.startsWith('video/'))
-      return <div style={styles.videoWrapper}><video src={fileUrl} controls style={styles.videoAttachment} onClick={e => { e.stopPropagation(); openFullscreen(fileUrl, fileType, message.fileName); }} /></div>;
-    if (fileType.startsWith('audio/'))
-      return <div style={styles.audioContainer}><div style={styles.audioIcon}>🎵</div><audio src={fileUrl} controls style={styles.audioPlayer} /></div>;
-    if (fileType === 'application/pdf' || message.fileName?.endsWith('.pdf'))
+    const ft  = message.fileType || '';
+    const url = message.fileUrl.startsWith('http')
+      ? message.fileUrl
+      : `https://classvibe-backend.onrender.com${message.fileUrl}`;
+    if (ft.startsWith('image/'))
+      return <img src={url} alt={message.fileName || 'Image'} style={S.imgAttach} onClick={() => openFullscreen(url, ft, message.fileName)} />;
+    if (ft.startsWith('video/'))
+      return <div><video src={url} controls style={S.videoAttach} onClick={e => { e.stopPropagation(); openFullscreen(url, ft, message.fileName); }} /></div>;
+    if (ft.startsWith('audio/'))
+      return <div style={S.audioWrap}><span>🎵</span><audio src={url} controls style={{ flex: 1, height: 32 }} /></div>;
+    if (ft === 'application/pdf' || message.fileName?.endsWith('.pdf'))
       return (
-        <div style={styles.documentContainer}>
-          <div style={styles.pdfPreview}>
-            <span style={styles.pdfIcon}>📄</span>
-            <div style={styles.pdfInfo}>
-              <span style={styles.pdfName}>{message.fileName || 'Document.pdf'}</span>
-              <span style={styles.pdfSize}>{Math.round((message.fileSize || 0) / 1024)} KB</span>
+        <div>
+          <div style={S.pdfPreview}>
+            <span style={{ fontSize: 28 }}>📄</span>
+            <div style={{ flex: 1 }}>
+              <div style={S.pdfName}>{message.fileName || 'Document.pdf'}</div>
+              <div style={S.pdfSize}>{Math.round((message.fileSize || 0) / 1024)} KB</div>
             </div>
           </div>
-          <div style={styles.pdfActions}>
-            <button style={styles.pdfButton} onClick={() => openPdfViewer(fileUrl, message.fileName)}>View</button>
-            <button style={styles.pdfButton} onClick={() => downloadFile(fileUrl, message.fileName)}>Download</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button style={S.pdfBtn} onClick={() => openPdf(url, message.fileName)}>View</button>
+            <button style={S.pdfBtn} onClick={() => downloadFile(url, message.fileName)}>Download</button>
           </div>
         </div>
       );
     return (
-      <a href={fileUrl} target="_blank" rel="noopener noreferrer" style={styles.documentAttachment} onClick={e => e.stopPropagation()}>
-        <span style={styles.documentIcon}>📄</span>
-        <span>{message.fileName || 'Download File'}</span>
-        <span style={styles.fileSize}>({Math.round((message.fileSize || 0) / 1024)} KB)</span>
+      <a href={url} target="_blank" rel="noopener noreferrer" style={S.docLink} onClick={e => e.stopPropagation()}>
+        <span>📄</span><span>{message.fileName || 'Download File'}</span>
+        <span style={{ fontSize: 11, color: '#94a3b8' }}>({Math.round((message.fileSize || 0) / 1024)} KB)</span>
       </a>
     );
   };
 
-  const filteredMessages = searchQuery.trim()
-    ? messages.filter(msg =>
-        msg.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        msg.sender?.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        msg.sender?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+  // ── Filter ────────────────────────────────────────────────────────────────
+  const filtered = searchQuery.trim()
+    ? messages.filter(m =>
+        m.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.sender?.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.sender?.name?.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : messages;
 
-  // ── Leaderboard bar renderer — UNCHANGED logic, same dark style ──
-  const renderLeaderboardBar = () => {
+  // ════════════════════════════════════════════════════════════════════════
+  //  LEADERBOARD RENDERER
+  //  collapsed  → only the ▼ arrow shown (no dark header bar at all)
+  //  expanded   → full dark bar: title + entries + ▼ to collapse
+  // ════════════════════════════════════════════════════════════════════════
+  const renderLeaderboard = () => {
     if (!leaderboardBar || leaderboardBar.length === 0) return null;
-    return (
-      <div style={{ ...lb.bar, maxHeight: lbCollapsed ? '42px' : '200px', overflow: 'hidden', transition: 'max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1)' }}>
-        {/* Header row — always visible */}
-        <div style={lb.headerRow}>
-          <span style={lb.trophy}>🏆</span>
-          <span style={lb.title}>Leaderboard of recent quiz</span>
+
+    if (lbCollapsed) {
+      // ── Collapsed state: ONLY the small arrow button, centered ──
+      return (
+        <div style={LB.arrowRow}>
           <button
-            style={lb.arrowBtn}
-            onClick={() => setLbCollapsed(v => !v)}
-            title={lbCollapsed ? 'Show leaderboard' : 'Hide leaderboard'}
+            style={LB.arrowBtn}
+            onClick={() => setLbCollapsed(false)}
+            title="Show recent quiz leaderboard"
           >
-            {lbCollapsed ? '▲' : '▼'}
+            ▼
           </button>
         </div>
-        {/* Entries — hidden when collapsed */}
-        {!lbCollapsed && (
-          <div style={lb.entries}>
-            {leaderboardBar.map((entry, i) => (
-              <div key={i} style={{ ...lb.entry, backgroundColor: i === 0 ? 'rgba(255,215,0,0.12)' : 'transparent' }}>
-                <span style={lb.rank}>{i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}</span>
-                <span style={lb.name}>{entry.name || entry.username || `Player ${i + 1}`}</span>
-                <span style={lb.score}>+{entry.score} Points</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
+      );
+    }
 
-  // ── NEW: Render message meta row (name + role badge + time) ──
-  const renderMsgMeta = (message, isOwnMessage) => {
-    const isTeacher  = message.sender?.role === 'teacher';
-    const isStudent  = message.sender?.role === 'student';
-    const senderName = message.sender?.name || message.sender?.username || 'Unknown';
+    // ── Expanded state: full dark leaderboard bar ──
     return (
-      <div style={styles.msgMeta}>
-        <span style={{ ...styles.senderName, color: isOwnMessage ? '#4f46e5' : getAvatarColor(message.sender?.username) }}>
-          {senderName}
-        </span>
-        {isTeacher && (
-          <span style={styles.teacherBadge}>Teacher</span>
-        )}
-        {isStudent && !isOwnMessage && (
-          <span style={styles.studentBadge}>Student</span>
-        )}
-        <span style={styles.metaTime}>{formatTime(message.createdAt)}</span>
-        {message.isEdited && !message.isDeleted && (
-          <span style={styles.editedMeta}>(edited)</span>
-        )}
+      <div style={LB.bar}>
+        <div style={LB.header}>
+          <span style={{ fontSize: 15 }}>🏆</span>
+          <span style={LB.title}>Leaderboard of recent quiz</span>
+          <button
+            style={LB.collapseBtn}
+            onClick={() => setLbCollapsed(true)}
+            title="Hide leaderboard"
+          >
+            ▼
+          </button>
+        </div>
+        <div style={LB.entries}>
+          {leaderboardBar.map((entry, i) => (
+            <div key={i} style={{ ...LB.entry, backgroundColor: i === 0 ? 'rgba(255,215,0,0.12)' : 'transparent' }}>
+              <span style={{ fontSize: 16, width: 24, flexShrink: 0 }}>
+                {i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}
+              </span>
+              <span style={LB.entryName}>{entry.name || entry.username || `Player ${i + 1}`}</span>
+              <span style={LB.entryScore}>+{entry.score} Points</span>
+            </div>
+          ))}
+        </div>
       </div>
     );
   };
 
-  return (
-    <div style={styles.chatArea}>
+  // ── Meta row for other-people's messages ────────────────────────────────
+  const renderMeta = (message) => {
+    const isTeacher = message.sender?.role === 'teacher';
+    const name      = message.sender?.name || message.sender?.username || 'Unknown';
+    return (
+      <div style={S.meta}>
+        <span style={{ ...S.metaName, color: getAvatarColor(message.sender?.username) }}>{name}</span>
+        {isTeacher && <span style={S.teacherBadge}>Teacher</span>}
+        <span style={S.metaTime}>{formatTime(message.createdAt)}</span>
+        {message.isEdited && !message.isDeleted && <span style={S.editedLabel}>(edited)</span>}
+      </div>
+    );
+  };
 
-      {/* ── Search bar — updated to clean light style ── */}
-      <div style={styles.searchBar}>
-        <div style={styles.searchInputWrapper}>
-          <span style={styles.searchIcon}>🔍</span>
+  // ── Inline edit UI (shared for own and others if teacher allows) ─────────
+  const renderEditUI = () => (
+    <div>
+      <input
+        style={S.editInput}
+        value={editText}
+        onChange={e => setEditText(e.target.value)}
+        onKeyPress={e => { if (e.key === 'Enter') saveEdit(); }}
+        onKeyDown={e => { if (e.key === 'Escape') cancelEdit(); }}
+        autoFocus
+      />
+      <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+        <button onClick={saveEdit}   style={S.saveBtn}>Save</button>
+        <button onClick={cancelEdit} style={S.cancelBtn}>Cancel</button>
+      </div>
+    </div>
+  );
+
+  // ── Message content (shared) ─────────────────────────────────────────────
+  const renderContent = (message) => (
+    <>
+      {(message.messageType === 'quiz_started' || message.messageType === 'quiz_ended') && !message.isDeleted && renderQuizNotification(message)}
+      {message.messageType === 'poll' && !message.isDeleted && renderPoll(message)}
+      {message.messageType === 'file' && !message.isDeleted && renderFile(message)}
+      {message.content && message.messageType !== 'poll' && message.messageType !== 'quiz_started' && message.messageType !== 'quiz_ended' && (
+        <div style={S.msgText}>{message.isDeleted ? '🚫 This message was deleted' : message.content}</div>
+      )}
+    </>
+  );
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  RENDER
+  // ════════════════════════════════════════════════════════════════════════
+  return (
+    <div style={S.chatArea}>
+
+      {/* ── Search bar ── */}
+      <div style={S.searchBar}>
+        <div style={S.searchWrap}>
+          <span style={{ fontSize: 13, opacity: 0.45 }}>🔍</span>
           <input
             type="text"
             placeholder="Search messages..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            style={styles.searchInput}
+            style={S.searchInput}
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} style={styles.clearSearch}>✕</button>
+            <button onClick={() => setSearchQuery('')} style={S.clearBtn}>✕</button>
           )}
         </div>
         {searchQuery && (
-          <span style={styles.searchResults}>{filteredMessages.length} result{filteredMessages.length !== 1 ? 's' : ''}</span>
+          <span style={S.searchCount}>{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
         )}
       </div>
 
-      {/* ── Collapsible leaderboard bar — UNCHANGED ── */}
-      {renderLeaderboardBar()}
+      {/* ── Leaderboard (arrow or full bar) ── */}
+      {renderLeaderboard()}
 
-      {/* ── Messages container ── */}
-      <div style={styles.messagesContainer} ref={messagesContainerRef} onScroll={handleScroll}>
+      {/* ── Messages ── */}
+      <div style={S.msgContainer} ref={messagesContainerRef} onScroll={handleScroll}>
 
-        {filteredMessages.length === 0 && !searchQuery && (
-          <div style={styles.emptyState}>
-            <div style={styles.emptyIcon}>💬</div>
-            <p style={styles.emptyText}>No messages yet</p>
-            <p style={styles.emptySubtext}>Start the conversation! 👋</p>
+        {/* Empty states */}
+        {filtered.length === 0 && !searchQuery && (
+          <div style={S.empty}>
+            <div style={{ fontSize: 52, marginBottom: 14, opacity: 0.35 }}>💬</div>
+            <p style={{ fontSize: 16, fontWeight: '600', margin: '0 0 6px', color: '#64748b' }}>No messages yet</p>
+            <p style={{ fontSize: 13, margin: 0, color: '#94a3b8' }}>Start the conversation! 👋</p>
           </div>
         )}
-        {filteredMessages.length === 0 && searchQuery && (
-          <div style={styles.emptyState}>
-            <div style={styles.emptyIcon}>🔍</div>
-            <p style={styles.emptyText}>No messages found</p>
-            <p style={styles.emptySubtext}>Try a different search</p>
+        {filtered.length === 0 && searchQuery && (
+          <div style={S.empty}>
+            <div style={{ fontSize: 52, marginBottom: 14, opacity: 0.35 }}>🔍</div>
+            <p style={{ fontSize: 16, fontWeight: '600', margin: '0 0 6px', color: '#64748b' }}>No results</p>
+            <p style={{ fontSize: 13, margin: 0, color: '#94a3b8' }}>Try a different search</p>
           </div>
         )}
 
-        {filteredMessages.map((message, index) => {
-          const isOwnMessage    = message.sender && message.sender._id === currentUserId;
-          const isSystemMessage = message.messageType === 'system';
-          const showDateSep     = needsDateSeparator(message, filteredMessages[index - 1]);
-          const isEditing       = editingMessageId === message._id;
-          const isPoll          = message.messageType === 'poll';
+        {filtered.map((message, index) => {
+          const isOwn    = message.sender?._id === currentUserId;
+          const isSys    = message.messageType === 'system';
+          const showDate = needsDateSep(message, filtered[index - 1]);
+          const editing  = editingMessageId === message._id;
+          const isPoll   = message.messageType === 'poll';
 
           return (
             <React.Fragment key={message._id || `${index}-${message.createdAt}`}>
 
-              {/* ── Date separator ── */}
-              {showDateSep && (
-                <div style={styles.dateSeparator}>
-                  <span style={styles.dateSeparatorText}>{getDateSeparator(message.createdAt)}</span>
+              {/* Date separator */}
+              {showDate && (
+                <div style={S.dateSep}>
+                  <span style={S.dateSepText}>{getDateLabel(message.createdAt)}</span>
                 </div>
               )}
 
-              {/* ── Message row ── */}
+              {/* Message row */}
               <div
-                style={styles.messageWrapper}
-                onContextMenu={e => !isSystemMessage && !isPoll && handleContextMenu(e, message)}
+                style={{
+                  ...S.msgRow,
+                  justifyContent: isSys ? 'center' : isOwn ? 'flex-end' : 'flex-start',
+                }}
+                onContextMenu={e => !isSys && !isPoll && handleContextMenu(e, message)}
               >
-                {/* System messages — centered pill */}
-                {isSystemMessage ? (
-                  <div style={styles.systemMessage}>{message.content}</div>
 
-                ) : (
-                  /* ── Normal message: ALL left-aligned ── */
-                  <div style={styles.messageRow}>
+                {/* ── System message ── */}
+                {isSys && (
+                  <div style={S.sysMsg}>{message.content}</div>
+                )}
 
+                {/* ══════════════════════════════════════════
+                    OWN MESSAGE — right side
+                    No avatar shown on left, small avatar on right
+                    No name/badge shown (it's your own message)
+                    Light-colored bubble (role-based tint)
+                    Timestamp + ✓✓ at bottom-right inside bubble
+                    ══════════════════════════════════════════ */}
+                {!isSys && isOwn && (
+                  <div style={S.ownRow}>
+                    {/* Bubble */}
+                    <div style={{
+                      ...S.bubble,
+                      backgroundColor: message.isDeleted ? '#f1f5f9' : ownBubbleColor.bg,
+                      borderColor:      message.isDeleted ? '#e2e8f0' : ownBubbleColor.border,
+                      borderRadius:     '12px 3px 12px 12px',
+                      opacity: message.isDeleted ? 0.65 : 1,
+                    }}>
+                      {editing ? renderEditUI() : renderContent(message)}
+                      {/* Footer: time + ticks */}
+                      {!editing && (
+                        <div style={S.ownFooter}>
+                          {message.isEdited && !message.isDeleted && (
+                            <span style={{ fontSize: 10, color: '#94a3b8', fontStyle: 'italic' }}>(edited)</span>
+                          )}
+                          <span style={S.ownTime}>{formatTime(message.createdAt)}</span>
+                          <span style={{ ...S.readTick, color: ownBubbleColor.tick }}>✓✓</span>
+                        </div>
+                      )}
+                    </div>
+                    {/* Own avatar — right side */}
+                    <div style={{ ...S.avatar, backgroundColor: ownBubbleColor.tick, flexShrink: 0, alignSelf: 'flex-end' }}>
+                      {getInitials(message.sender?.username)}
+                    </div>
+                  </div>
+                )}
+
+                {/* ══════════════════════════════════════════
+                    OTHER'S MESSAGE — left side
+                    Avatar on left (colored by username)
+                    Meta row: name + [Teacher badge] + time
+                    White bubble below meta
+                    ══════════════════════════════════════════ */}
+                {!isSys && !isOwn && (
+                  <div style={S.otherRow}>
                     {/* Avatar */}
                     <div style={{
-                      ...styles.avatar,
-                      backgroundColor: isOwnMessage ? '#4f46e5' : getAvatarColor(message.sender?.username),
+                      ...S.avatar,
+                      backgroundColor: getAvatarColor(message.sender?.username),
+                      flexShrink: 0,
+                      alignSelf: 'flex-start',
+                      marginTop: 20, // aligns with bubble, below meta row
                     }}>
                       {getInitials(message.sender?.username)}
-                      {/* Online dot — shown if sender is in onlineUsers */}
                     </div>
 
-                    {/* Message column: meta + bubble */}
-                    <div style={styles.messageColumn}>
-
-                      {/* Meta: name + badge + time */}
-                      {renderMsgMeta(message, isOwnMessage)}
+                    {/* Column: meta + bubble */}
+                    <div style={S.otherCol}>
+                      {/* Meta row above bubble */}
+                      {renderMeta(message)}
 
                       {/* Bubble */}
                       <div style={{
-                        ...styles.messageBubble,
-                        backgroundColor: message.isDeleted
-                          ? '#f1f5f9'
-                          : isOwnMessage
-                            ? '#eff6ff'   /* own: light indigo-blue */
-                            : '#ffffff',  /* others: white */
-                        borderColor: message.isDeleted
-                          ? '#e2e8f0'
-                          : isOwnMessage
-                            ? '#c7d2fe'
-                            : '#e2e8f0',
+                        ...S.bubble,
+                        backgroundColor: message.isDeleted ? '#f1f5f9' : '#ffffff',
+                        borderColor:      message.isDeleted ? '#e2e8f0' : '#e2e8f0',
+                        borderRadius:     '3px 12px 12px 12px',
                         opacity: message.isDeleted ? 0.65 : 1,
                       }}>
-
-                        {isEditing ? (
-                          /* ── Edit mode ── */
-                          <div style={styles.editContainer}>
-                            <input
-                              type="text"
-                              value={editText}
-                              onChange={e => setEditText(e.target.value)}
-                              onKeyPress={e => { if (e.key === 'Enter') saveEditMessage(); if (e.key === 'Escape') cancelEdit(); }}
-                              style={styles.editInput}
-                              autoFocus
-                            />
-                            <div style={styles.editButtons}>
-                              <button onClick={saveEditMessage} style={styles.saveBtn}>Save</button>
-                              <button onClick={cancelEdit}      style={styles.cancelBtn}>Cancel</button>
-                            </div>
-                          </div>
-
-                        ) : (
-                          <>
-                            {/* Quiz notification */}
-                            {(message.messageType === 'quiz_started' || message.messageType === 'quiz_ended') && !message.isDeleted && renderQuizNotification(message)}
-
-                            {/* Poll */}
-                            {isPoll && !message.isDeleted && renderPoll(message)}
-
-                            {/* File attachment */}
-                            {message.messageType === 'file' && !message.isDeleted && renderFileAttachment(message)}
-
-                            {/* Text content */}
-                            {message.content && !isPoll && message.messageType !== 'quiz_started' && message.messageType !== 'quiz_ended' && (
-                              <div style={styles.messageContent}>{message.content}</div>
-                            )}
-
-                            {/* Deleted placeholder */}
-                            {message.isDeleted && (
-                              <div style={styles.deletedText}>🚫 This message was deleted</div>
-                            )}
-                          </>
-                        )}
-
-                        {/* Read receipt for own messages */}
-                        {!isEditing && isOwnMessage && !message.isDeleted && (
-                          <div style={styles.readReceipt}>✓✓</div>
-                        )}
+                        {editing ? renderEditUI() : renderContent(message)}
                       </div>
                     </div>
                   </div>
@@ -509,18 +526,14 @@ const ChatArea = ({
         })}
 
         {/* Typing indicator */}
-        {typingUsers && typingUsers.length > 0 && typingUsers.some(u => u && u.trim()) && (
-          <div style={styles.typingWrapper}>
-            <div style={styles.typingBubble}>
-              <span style={styles.typingText}>
-                {typingUsers.length === 1
-                  ? `${typingUsers[0]} is typing`
-                  : `${typingUsers.length} people are typing`}
+        {typingUsers?.length > 0 && typingUsers.some(u => u?.trim()) && (
+          <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 4, paddingLeft: 8 }}>
+            <div style={S.typingBubble}>
+              <span style={{ fontSize: 13, color: '#64748b', fontStyle: 'italic' }}>
+                {typingUsers.length === 1 ? `${typingUsers[0]} is typing` : `${typingUsers.length} people are typing`}
               </span>
-              <div style={styles.typingDots}>
-                <span style={styles.dot} />
-                <span style={styles.dot} />
-                <span style={styles.dot} />
+              <div style={{ display: 'flex', gap: 3, marginLeft: 8, alignItems: 'center' }}>
+                <span style={S.dot}/><span style={S.dot}/><span style={S.dot}/>
               </div>
             </div>
           </div>
@@ -531,46 +544,46 @@ const ChatArea = ({
 
       {/* Scroll-to-bottom button */}
       {showScrollButton && (
-        <button style={styles.scrollButton} onClick={() => scrollToBottom()}>↓</button>
+        <button style={S.scrollBtn} onClick={() => scrollToBottom()}>↓</button>
       )}
 
-      {/* ── Context menu — UNCHANGED ── */}
+      {/* ── Context menu ── */}
       {contextMenu && (
-        <div style={{ ...styles.contextMenu, top: contextMenu.y, left: contextMenu.x }}>
-          <div style={styles.contextMenuItem} onClick={() => copyMessage(contextMenu.message.content)}>
-            📋 Copy
-          </div>
+        <div style={{ ...S.ctxMenu, top: contextMenu.y, left: contextMenu.x }}>
+          <div style={S.ctxItem} onClick={() => copyMsg(contextMenu.message.content)}>📋 Copy</div>
           {contextMenu.isOwn && !contextMenu.message.isDeleted && (
             <>
-              <div style={styles.contextMenuItem} onClick={() => startEditMessage(contextMenu.message)}>✏️ Edit</div>
-              <div style={{ ...styles.contextMenuItem, color: '#ef4444' }} onClick={() => deleteMessage(contextMenu.message._id)}>🗑️ Delete</div>
+              <div style={S.ctxItem} onClick={() => startEdit(contextMenu.message)}>✏️ Edit</div>
+              <div style={{ ...S.ctxItem, color: '#ef4444' }} onClick={() => deleteMsg(contextMenu.message._id)}>🗑️ Delete</div>
             </>
           )}
         </div>
       )}
 
-      {/* ── Full-screen media viewer — UNCHANGED ── */}
+      {/* ── Fullscreen media viewer — UNCHANGED ── */}
       {fullscreenMedia && (
-        <div style={styles.fullscreenOverlay}>
-          <div style={styles.fullscreenHeader}>
-            <button style={styles.fullscreenBtn} onClick={closeFullscreen}>✕ Close</button>
-            <span style={styles.fullscreenTitle}>{fullscreenMedia.fileName}</span>
-            <div style={styles.fullscreenActions}>
+        <div style={S.fsOverlay}>
+          <div style={S.fsHeader}>
+            <button style={S.fsBtn} onClick={closeFullscreen}>✕ Close</button>
+            <span style={{ fontSize: 14, fontWeight: '500', color: 'white' }}>{fullscreenMedia.fileName}</span>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               {fullscreenMedia.fileType?.startsWith('image/') && (
                 <>
-                  <button style={styles.fullscreenBtn} onClick={zoomOut}>-</button>
-                  <span style={styles.zoomLevel}>{Math.round(zoomLevel * 100)}%</span>
-                  <button style={styles.fullscreenBtn} onClick={zoomIn}>+</button>
+                  <button style={S.fsBtn} onClick={zoomOut}>−</button>
+                  <span style={{ fontSize: 13, color: 'white', minWidth: 46, textAlign: 'center' }}>
+                    {Math.round(zoomLevel * 100)}%
+                  </span>
+                  <button style={S.fsBtn} onClick={zoomIn}>+</button>
                 </>
               )}
-              <button style={styles.fullscreenBtn} onClick={() => downloadFile(fullscreenMedia.fileUrl, fullscreenMedia.fileName)}>⬇ Download</button>
+              <button style={S.fsBtn} onClick={() => downloadFile(fullscreenMedia.fileUrl, fullscreenMedia.fileName)}>⬇ Download</button>
             </div>
           </div>
-          <div style={styles.fullscreenContent}>
+          <div style={S.fsContent}>
             {fullscreenMedia.fileType?.startsWith('image/')
-              ? <img src={fullscreenMedia.fileUrl} alt={fullscreenMedia.fileName} style={{ ...styles.fullscreenImage, transform: `scale(${zoomLevel})` }} />
+              ? <img src={fullscreenMedia.fileUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', transform: `scale(${zoomLevel})`, transition: 'transform 0.2s' }} />
               : fullscreenMedia.fileType?.startsWith('video/')
-                ? <video src={fullscreenMedia.fileUrl} controls autoPlay style={styles.fullscreenVideo} />
+                ? <video src={fullscreenMedia.fileUrl} controls autoPlay style={{ maxWidth: '100%', maxHeight: '100%' }} />
                 : null}
           </div>
         </div>
@@ -578,451 +591,252 @@ const ChatArea = ({
 
       {/* ── PDF viewer — UNCHANGED ── */}
       {pdfViewer && (
-        <div style={styles.pdfViewerOverlay}>
-          <div style={styles.pdfViewerHeader}>
-            <span style={styles.pdfViewerTitle}>{pdfViewer.fileName}</span>
-            <div>
-              <button style={styles.fullscreenBtn} onClick={() => downloadFile(pdfViewer.fileUrl, pdfViewer.fileName)}>⬇ Download</button>
-              <button style={styles.fullscreenBtn} onClick={closePdfViewer}>✕ Close</button>
+        <div style={S.fsOverlay}>
+          <div style={S.fsHeader}>
+            <span style={{ fontSize: 14, fontWeight: '500', color: 'white' }}>{pdfViewer.fileName}</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={S.fsBtn} onClick={() => downloadFile(pdfViewer.fileUrl, pdfViewer.fileName)}>⬇ Download</button>
+              <button style={S.fsBtn} onClick={closePdf}>✕ Close</button>
             </div>
           </div>
-          <iframe src={pdfViewer.fileUrl} style={styles.pdfIframe} title={pdfViewer.fileName} />
+          <iframe src={pdfViewer.fileUrl} style={{ flex: 1, width: '100%', border: 'none' }} title={pdfViewer.fileName} />
         </div>
       )}
     </div>
   );
 };
 
-// ══════════════════════════════════════════════
-//  LEADERBOARD BAR STYLES — dark card, unchanged
-// ══════════════════════════════════════════════
-const lb = {
-  bar: {
-    backgroundColor: '#0f172a',
-    borderBottom: '1px solid rgba(255,255,255,0.08)',
-    flexShrink: 0,
-  },
-  headerRow: {
+// ══════════════════════════════════════════════════════════════════════════
+//  LEADERBOARD STYLES
+// ══════════════════════════════════════════════════════════════════════════
+const LB = {
+  // Collapsed: only arrow row
+  arrowRow: {
     display: 'flex',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: '10px',
-    padding: '8px 16px',
-    height: '42px',
-  },
-  trophy: { fontSize: '16px' },
-  title: {
-    flex: 1,
-    fontSize: '12px',
-    fontWeight: '600',
-    color: '#cbd5e1',
-    letterSpacing: '0.4px',
-    textTransform: 'uppercase',
+    padding: '4px 0 2px',
+    backgroundColor: '#f8fafc',
+    borderBottom: '1px solid #e2e8f0',
+    flexShrink: 0,
   },
   arrowBtn: {
     background: 'none',
-    border: 'none',
-    color: '#64748b',
-    cursor: 'pointer',
-    fontSize: '11px',
-    padding: '4px 8px',
+    border: '1px solid #cbd5e1',
     borderRadius: '4px',
-    transition: 'color 0.2s',
+    padding: '2px 22px',
+    cursor: 'pointer',
+    color: '#64748b',
+    fontSize: '12px',
+    lineHeight: 1.6,
+    transition: 'background 0.15s, color 0.15s',
+  },
+  // Expanded: dark bar
+  bar: {
+    backgroundColor: '#0f172a',
+    borderBottom: '1px solid rgba(255,255,255,0.07)',
+    flexShrink: 0,
+  },
+  header: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '8px 16px',
+    minHeight: 42,
+  },
+  title: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94a3b8',
+    letterSpacing: '0.6px',
+    textTransform: 'uppercase',
+  },
+  collapseBtn: {
+    background: 'none',
+    border: 'none',
+    color: '#475569',
+    cursor: 'pointer',
+    fontSize: 11,
+    padding: '4px 8px',
+    borderRadius: 4,
     lineHeight: 1,
   },
   entries: {
-    padding: '4px 16px 12px',
+    padding: '2px 16px 12px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '2px',
+    gap: 2,
   },
   entry: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
+    gap: 10,
     padding: '6px 10px',
-    borderRadius: '6px',
+    borderRadius: 6,
   },
-  rank:  { fontSize: '16px', flexShrink: 0, width: '24px' },
-  name:  { flex: 1, fontSize: '13px', fontWeight: '600', color: '#e2e8f0' },
-  score: { fontSize: '12px', fontWeight: '700', color: '#22c55e', whiteSpace: 'nowrap' },
+  entryName:  { flex: 1, fontSize: 13, fontWeight: '600', color: '#e2e8f0' },
+  entryScore: { fontSize: 12, fontWeight: '700', color: '#22c55e', whiteSpace: 'nowrap' },
 };
 
-// ══════════════════════════════════════════════
-//  MAIN STYLES — Visily-style clean classroom chat
-// ══════════════════════════════════════════════
-const styles = {
+// ══════════════════════════════════════════════════════════════════════════
+//  MAIN STYLES
+// ══════════════════════════════════════════════════════════════════════════
+const S = {
+  // Layout
+  chatArea:    { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#f8fafc', position: 'relative' },
 
-  // ── Layout ──
-  chatArea: {
-    flex: 1,
+  // Search bar
+  searchBar:   { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', flexShrink: 0 },
+  searchWrap:  { flex: 1, display: 'flex', alignItems: 'center', gap: 8, backgroundColor: '#f1f5f9', borderRadius: 8, padding: '0 12px', border: '1px solid #e2e8f0' },
+  searchInput: { flex: 1, padding: '8px 0', fontSize: 13, border: 'none', outline: 'none', backgroundColor: 'transparent', color: '#1e293b' },
+  clearBtn:    { background: 'none', border: 'none', fontSize: 14, cursor: 'pointer', color: '#94a3b8', padding: '2px 4px' },
+  searchCount: { fontSize: 12, color: '#64748b', whiteSpace: 'nowrap', fontWeight: '500' },
+
+  // Messages container
+  msgContainer: { flex: 1, overflowY: 'auto', padding: '20px 20px', display: 'flex', flexDirection: 'column', gap: 2 },
+
+  // Empty state
+  empty: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%' },
+
+  // Date separator
+  dateSep:     { display: 'flex', justifyContent: 'center', margin: '16px 0 10px' },
+  dateSepText: { backgroundColor: '#e2e8f0', color: '#64748b', padding: '3px 12px', borderRadius: 20, fontSize: 11, fontWeight: '600' },
+
+  // Message row wrapper — justifyContent set inline per message
+  msgRow: { display: 'flex', width: '100%', marginBottom: 8 },
+
+  // System message
+  sysMsg: { padding: '5px 16px', backgroundColor: '#e2e8f0', color: '#475569', borderRadius: 20, fontSize: 12, fontStyle: 'italic', textAlign: 'center', margin: '0 auto', maxWidth: '70%' },
+
+  // ── OWN message row (right side) ──
+  ownRow: {
     display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-    backgroundColor: '#f8fafc',
-    position: 'relative',
-  },
-
-  // ── Search bar — clean light style ──
-  searchBar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    padding: '10px 16px',
-    backgroundColor: '#ffffff',
-    borderBottom: '1px solid #e2e8f0',
-    flexShrink: 0,
-  },
-  searchInputWrapper: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    backgroundColor: '#f1f5f9',
-    borderRadius: '8px',
-    padding: '0 12px',
-    border: '1px solid #e2e8f0',
-    transition: 'border-color 0.2s',
-  },
-  searchIcon: { fontSize: '13px', opacity: 0.5 },
-  searchInput: {
-    flex: 1,
-    padding: '8px 0',
-    fontSize: '13px',
-    border: 'none',
-    outline: 'none',
-    backgroundColor: 'transparent',
-    color: '#1e293b',
-  },
-  clearSearch: {
-    background: 'none',
-    border: 'none',
-    fontSize: '14px',
-    cursor: 'pointer',
-    color: '#94a3b8',
-    padding: '2px 4px',
-    lineHeight: 1,
-  },
-  searchResults: {
-    fontSize: '12px',
-    color: '#64748b',
-    whiteSpace: 'nowrap',
-    fontWeight: '500',
-  },
-
-  // ── Messages container ──
-  messagesContainer: {
-    flex: 1,
-    overflowY: 'auto',
-    padding: '20px 24px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-  },
-
-  // ── Empty state ──
-  emptyState:   { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8' },
-  emptyIcon:    { fontSize: '56px', marginBottom: '16px', opacity: 0.4 },
-  emptyText:    { fontSize: '17px', fontWeight: '600', margin: '0 0 6px', color: '#64748b' },
-  emptySubtext: { fontSize: '13px', margin: 0, color: '#94a3b8' },
-
-  // ── Date separator ──
-  dateSeparator: {
-    display: 'flex',
-    justifyContent: 'center',
-    margin: '20px 0 12px',
-  },
-  dateSeparatorText: {
-    backgroundColor: '#e2e8f0',
-    color: '#64748b',
-    padding: '4px 12px',
-    borderRadius: '20px',
-    fontSize: '11px',
-    fontWeight: '600',
-    letterSpacing: '0.3px',
-  },
-
-  // ── Message wrapper (outer row) ──
-  // ALL messages are left-aligned (no flex-end for own)
-  messageWrapper: {
-    display: 'flex',
-    width: '100%',
-    justifyContent: 'flex-start',
-    marginBottom: '10px',
-  },
-
-  // ── System message ──
-  systemMessage: {
-    padding: '6px 16px',
-    backgroundColor: '#e2e8f0',
-    color: '#475569',
-    borderRadius: '20px',
-    fontSize: '12px',
-    fontStyle: 'italic',
-    textAlign: 'center',
-    margin: '0 auto',
+    alignItems: 'flex-end',
+    gap: 8,
     maxWidth: '70%',
   },
 
-  // ── Message row: avatar + column ──
-  messageRow: {
+  // ── OTHER message row (left side) ──
+  otherRow: {
     display: 'flex',
     alignItems: 'flex-start',
-    gap: '10px',
-    maxWidth: '75%',
+    gap: 10,
+    maxWidth: '70%',
+  },
+  otherCol: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 3,
+    flex: 1,
   },
 
-  // ── Avatar ──
+  // Avatar (shared)
   avatar: {
-    width: '34px',
-    height: '34px',
+    width: 32,
+    height: 32,
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     color: 'white',
-    fontSize: '12px',
+    fontSize: 11,
     fontWeight: '700',
-    flexShrink: 0,
-    marginTop: '2px',
-    position: 'relative',
   },
 
-  // ── Message column: meta + bubble ──
-  messageColumn: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-    flex: 1,
-  },
+  // Meta row (others only)
+  meta:         { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingLeft: 2 },
+  metaName:     { fontSize: 13, fontWeight: '700', lineHeight: 1 },
+  teacherBadge: { fontSize: 10, fontWeight: '600', color: '#92400e', backgroundColor: '#fef3c7', border: '1px solid #fcd34d', borderRadius: 4, padding: '1px 6px' },
+  metaTime:     { fontSize: 11, color: '#94a3b8' },
+  editedLabel:  { fontSize: 11, color: '#94a3b8', fontStyle: 'italic' },
 
-  // ── Message meta: name + badge + time ──
-  msgMeta: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    flexWrap: 'wrap',
-  },
-  senderName: {
-    fontSize: '13px',
-    fontWeight: '700',
-    lineHeight: 1,
-  },
-  teacherBadge: {
-    fontSize: '10px',
-    fontWeight: '600',
-    color: '#92400e',
-    backgroundColor: '#fef3c7',
-    border: '1px solid #fcd34d',
-    borderRadius: '4px',
-    padding: '1px 6px',
-    lineHeight: '16px',
-    letterSpacing: '0.2px',
-  },
-  studentBadge: {
-    fontSize: '10px',
-    fontWeight: '600',
-    color: '#1e40af',
-    backgroundColor: '#dbeafe',
-    border: '1px solid #93c5fd',
-    borderRadius: '4px',
-    padding: '1px 6px',
-    lineHeight: '16px',
-    letterSpacing: '0.2px',
-  },
-  metaTime: {
-    fontSize: '11px',
-    color: '#94a3b8',
-    fontWeight: '400',
-  },
-  editedMeta: {
-    fontSize: '11px',
-    color: '#94a3b8',
-    fontStyle: 'italic',
-  },
-
-  // ── Message bubble ──
-  messageBubble: {
-    padding: '10px 14px',
-    borderRadius: '4px 12px 12px 12px',
+  // Bubble (shared — borderColor and borderRadius set inline)
+  bubble: {
+    padding: '10px 13px',
     border: '1px solid',
     wordWrap: 'break-word',
     position: 'relative',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-    transition: 'opacity 0.2s',
-  },
-  messageContent: {
-    fontSize: '14px',
-    lineHeight: '21px',
-    color: '#1e293b',
-    wordBreak: 'break-word',
-  },
-  deletedText: {
-    fontSize: '13px',
-    color: '#94a3b8',
-    fontStyle: 'italic',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+    maxWidth: '100%',
   },
 
-  // ── Own message read receipt ──
-  readReceipt: {
-    fontSize: '11px',
-    color: '#6366f1',
-    textAlign: 'right',
-    marginTop: '4px',
-    opacity: 0.8,
-  },
+  // Own footer inside bubble
+  ownFooter: { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 5 },
+  ownTime:   { fontSize: 11, color: '#94a3b8' },
+  readTick:  { fontSize: 11 },
 
-  // ── Edit mode ──
-  editContainer: { width: '100%' },
-  editInput: {
-    width: '100%',
-    padding: '8px 10px',
-    fontSize: '14px',
-    border: '1px solid #c7d2fe',
-    borderRadius: '6px',
-    marginBottom: '8px',
-    outline: 'none',
-    backgroundColor: '#fafafa',
-  },
-  editButtons: { display: 'flex', gap: '8px' },
-  saveBtn:   { padding: '5px 14px', fontSize: '12px', fontWeight: '600', backgroundColor: '#6366f1', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' },
-  cancelBtn: { padding: '5px 14px', fontSize: '12px', fontWeight: '600', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: '5px', cursor: 'pointer' },
+  // Edit UI
+  editInput: { width: '100%', padding: '7px 10px', fontSize: 14, border: '1px solid #c7d2fe', borderRadius: 6, marginBottom: 0, outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' },
+  saveBtn:   { padding: '5px 14px', fontSize: 12, fontWeight: '600', backgroundColor: '#6366f1', color: 'white', border: 'none', borderRadius: 5, cursor: 'pointer' },
+  cancelBtn: { padding: '5px 14px', fontSize: 12, fontWeight: '600', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 5, cursor: 'pointer' },
 
-  // ── Typing indicator ──
-  typingWrapper: { display: 'flex', justifyContent: 'flex-start', marginTop: '4px' },
-  typingBubble: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 14px',
-    backgroundColor: '#ffffff',
-    border: '1px solid #e2e8f0',
-    borderRadius: '4px 12px 12px 12px',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-  },
-  typingText: { fontSize: '13px', color: '#64748b', fontStyle: 'italic' },
-  typingDots: { display: 'flex', gap: '3px', alignItems: 'center' },
-  dot: { width: '5px', height: '5px', backgroundColor: '#94a3b8', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both' },
+  // Message text
+  msgText: { fontSize: 14, lineHeight: '21px', color: '#1e293b', wordBreak: 'break-word' },
 
-  // ── Scroll button ──
-  scrollButton: {
-    position: 'absolute',
-    bottom: '20px',
-    right: '20px',
-    width: '38px',
-    height: '38px',
-    borderRadius: '50%',
-    backgroundColor: '#6366f1',
-    color: 'white',
-    border: 'none',
-    fontSize: '18px',
-    cursor: 'pointer',
-    boxShadow: '0 4px 12px rgba(99,102,241,0.35)',
-    zIndex: 10,
-  },
+  // Typing
+  typingBubble: { display: 'flex', alignItems: 'center', padding: '8px 14px', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '3px 12px 12px 12px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' },
+  dot:          { display: 'inline-block', width: 5, height: 5, backgroundColor: '#94a3b8', borderRadius: '50%', animation: 'bounce 1.4s infinite ease-in-out both' },
 
-  // ── Context menu ──
-  contextMenu: {
-    position: 'fixed',
-    backgroundColor: 'white',
-    borderRadius: '10px',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-    padding: '6px 0',
-    zIndex: 1000,
-    minWidth: '150px',
-    border: '1px solid #f1f5f9',
-  },
-  contextMenuItem: {
-    padding: '10px 16px',
-    fontSize: '13px',
-    cursor: 'pointer',
-    color: '#374151',
-    transition: 'background-color 0.15s',
-  },
+  // Scroll button
+  scrollBtn: { position: 'absolute', bottom: 16, right: 16, width: 36, height: 36, borderRadius: '50%', backgroundColor: '#6366f1', color: 'white', border: 'none', fontSize: 18, cursor: 'pointer', boxShadow: '0 4px 12px rgba(99,102,241,0.3)', zIndex: 10 },
 
-  // ── Poll styles ──
-  pollContainer: { padding: '4px 0' },
-  pollHeader: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' },
-  pollIcon: { fontSize: '18px' },
-  pollQuestion: { fontSize: '14px', fontWeight: '600', color: '#1e293b' },
-  pollOptions: { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '8px' },
-  pollOptionWrapper: { width: '100%' },
-  pollButton: { width: '100%', padding: '10px 14px', fontSize: '13px', backgroundColor: '#f1f5f9', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: '7px', cursor: 'pointer', fontWeight: '500', textAlign: 'left', transition: 'all 0.2s' },
-  pollResult: { padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: '7px', backgroundColor: 'white' },
-  pollResultTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' },
-  pollOptionText: { fontSize: '13px', color: '#1e293b', fontWeight: '500' },
-  pollPercentage: { fontSize: '12px', fontWeight: '700', color: '#6366f1' },
-  pollProgressBar: { width: '100%', height: '5px', backgroundColor: '#e2e8f0', borderRadius: '3px', overflow: 'hidden', marginBottom: '4px' },
-  pollProgressFill: { height: '100%', transition: 'width 0.3s' },
-  pollVoteCount: { fontSize: '11px', color: '#64748b' },
-  checkmark: { color: '#6366f1', fontWeight: 'bold' },
-  pollFooter: { fontSize: '11px', color: '#94a3b8', fontStyle: 'italic', marginTop: '4px' },
-  pollError: { padding: '8px', fontSize: '12px', color: '#ef4444', fontStyle: 'italic' },
+  // Context menu
+  ctxMenu: { position: 'fixed', backgroundColor: 'white', borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: '6px 0', zIndex: 1000, minWidth: 150, border: '1px solid #f1f5f9' },
+  ctxItem: { padding: '10px 16px', fontSize: 13, cursor: 'pointer', color: '#374151' },
 
-  // ── Quiz notification styles ──
-  quizNotificationHeader: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' },
-  quizIcon: { fontSize: '26px' },
-  quizNotificationTitle: { fontSize: '16px', fontWeight: '700', color: '#4f46e5' },
-  quizNotificationContent: { marginBottom: '12px' },
-  quizTitle: { fontSize: '15px', fontWeight: '600', color: '#1e293b', marginBottom: '6px' },
-  quizMessage: { fontSize: '13px', color: '#64748b' },
-  joinQuizBtn: { width: '100%', padding: '10px', fontSize: '14px', fontWeight: '700', backgroundColor: '#4f46e5', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', boxShadow: '0 2px 8px rgba(79,70,229,0.25)' },
-  winnerInfo: { display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px', backgroundColor: 'rgba(255,215,0,0.1)', borderRadius: '8px', marginBottom: '10px', border: '1px solid rgba(255,215,0,0.25)' },
-  winnerBadge: { fontSize: '32px' },
-  winnerName: { fontSize: '14px', fontWeight: '600', color: '#1e293b', marginBottom: '3px' },
-  winnerScore: { fontSize: '12px', color: '#64748b', fontWeight: '500' },
+  // ── Poll ──
+  pollContainer: { padding: '2px 0' },
+  pollHeader:    { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, fontSize: 18 },
+  pollQuestion:  { fontSize: 14, fontWeight: '600', color: '#1e293b' },
+  pollOptions:   { display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 8 },
+  pollBtn:       { width: '100%', padding: '9px 13px', fontSize: 13, backgroundColor: '#f1f5f9', color: '#1e293b', border: '1px solid #e2e8f0', borderRadius: 7, cursor: 'pointer', fontWeight: '500', textAlign: 'left' },
+  pollResult:    { padding: '9px 12px', borderRadius: 7, backgroundColor: 'white' },
+  pollResultTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 },
+  pollOptText:   { fontSize: 13, color: '#1e293b', fontWeight: '500' },
+  pollPct:       { fontSize: 12, fontWeight: '700', color: '#6366f1' },
+  pollBar:       { width: '100%', height: 4, backgroundColor: '#e2e8f0', borderRadius: 2, overflow: 'hidden', marginBottom: 4 },
+  pollFill:      { height: '100%', transition: 'width 0.3s' },
+  pollVotes:     { fontSize: 11, color: '#64748b' },
+  pollFooter:    { fontSize: 11, color: '#94a3b8', fontStyle: 'italic', marginTop: 4 },
+  pollError:     { fontSize: 12, color: '#ef4444', fontStyle: 'italic' },
 
-  // ── File attachment styles ──
-  imageAttachment: { maxWidth: '100%', maxHeight: '280px', borderRadius: '8px', cursor: 'pointer', marginBottom: '4px', display: 'block' },
-  videoWrapper: { maxWidth: '100%', marginBottom: '4px' },
-  videoAttachment: { maxWidth: '100%', maxHeight: '280px', borderRadius: '8px', cursor: 'pointer' },
-  audioContainer: { display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: '20px', marginBottom: '4px' },
-  audioIcon: { fontSize: '18px' },
-  audioPlayer: { flex: 1, height: '32px' },
-  documentContainer: { marginBottom: '4px' },
-  pdfPreview: { display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px', backgroundColor: '#f8fafc', borderRadius: '8px', marginBottom: '8px', border: '1px solid #e2e8f0' },
-  pdfIcon: { fontSize: '28px' },
-  pdfInfo: { flex: 1, display: 'flex', flexDirection: 'column', gap: '3px' },
-  pdfName: { fontSize: '13px', fontWeight: '600', color: '#1e293b' },
-  pdfSize: { fontSize: '11px', color: '#64748b' },
-  pdfActions: { display: 'flex', gap: '8px' },
-  pdfButton: { flex: 1, padding: '7px', fontSize: '12px', fontWeight: '600', backgroundColor: '#6366f1', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' },
-  documentAttachment: { display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', backgroundColor: '#f8fafc', borderRadius: '8px', textDecoration: 'none', color: '#1e293b', marginBottom: '4px', border: '1px solid #e2e8f0' },
-  documentIcon: { fontSize: '18px' },
-  fileSize: { fontSize: '11px', color: '#94a3b8' },
+  // ── Quiz notification ──
+  quizBox:      { padding: '12px 14px', backgroundColor: 'rgba(79,70,229,0.06)', borderRadius: 10, border: '1.5px solid #c7d2fe' },
+  quizHeader:   { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 },
+  quizHeadText: { fontSize: 15, fontWeight: '700', color: '#4f46e5' },
+  quizBody:     { marginBottom: 10 },
+  quizName:     { fontSize: 14, fontWeight: '600', color: '#1e293b', marginBottom: 5 },
+  quizMsg:      { fontSize: 13, color: '#64748b' },
+  joinBtn:      { width: '100%', padding: 10, fontSize: 14, fontWeight: '700', backgroundColor: '#4f46e5', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer' },
+  winnerRow:    { display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', backgroundColor: 'rgba(255,215,0,0.1)', borderRadius: 8, marginBottom: 8, border: '1px solid rgba(255,215,0,0.25)' },
+  winnerName:   { fontSize: 13, fontWeight: '600', color: '#1e293b', marginBottom: 3 },
+  winnerPts:    { fontSize: 12, color: '#64748b' },
 
-  // ── Fullscreen overlay ──
-  fullscreenOverlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 2000, display: 'flex', flexDirection: 'column' },
-  fullscreenHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', backgroundColor: 'rgba(0,0,0,0.7)', color: 'white' },
-  fullscreenTitle: { fontSize: '14px', fontWeight: '500' },
-  fullscreenActions: { display: 'flex', gap: '10px', alignItems: 'center' },
-  fullscreenBtn: { padding: '7px 12px', fontSize: '13px', backgroundColor: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '6px', cursor: 'pointer' },
-  zoomLevel: { fontSize: '13px', color: 'white', minWidth: '46px', textAlign: 'center' },
-  fullscreenContent: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: '20px' },
-  fullscreenImage: { maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', transition: 'transform 0.2s' },
-  fullscreenVideo: { maxWidth: '100%', maxHeight: '100%' },
+  // ── Files ──
+  imgAttach:  { maxWidth: '100%', maxHeight: 260, borderRadius: 8, cursor: 'pointer', display: 'block', marginBottom: 4 },
+  videoAttach:{ maxWidth: '100%', maxHeight: 260, borderRadius: 8 },
+  audioWrap:  { display: 'flex', alignItems: 'center', gap: 10, padding: 8, backgroundColor: 'rgba(0,0,0,0.03)', borderRadius: 20 },
+  pdfPreview: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', backgroundColor: '#f8fafc', borderRadius: 8, marginBottom: 6, border: '1px solid #e2e8f0' },
+  pdfName:    { fontSize: 13, fontWeight: '600', color: '#1e293b' },
+  pdfSize:    { fontSize: 11, color: '#64748b' },
+  pdfBtn:     { flex: 1, padding: 7, fontSize: 12, fontWeight: '600', backgroundColor: '#6366f1', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer' },
+  docLink:    { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', backgroundColor: '#f8fafc', borderRadius: 8, textDecoration: 'none', color: '#1e293b', border: '1px solid #e2e8f0' },
 
-  // ── PDF viewer overlay ──
-  pdfViewerOverlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 2000, display: 'flex', flexDirection: 'column' },
-  pdfViewerHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', backgroundColor: 'rgba(0,0,0,0.7)', color: 'white' },
-  pdfViewerTitle: { fontSize: '14px', fontWeight: '500' },
-  pdfIframe: { flex: 1, width: '100%', border: 'none' },
+  // Fullscreen overlay
+  fsOverlay: { position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.95)', zIndex: 2000, display: 'flex', flexDirection: 'column' },
+  fsHeader:  { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 20px', backgroundColor: 'rgba(0,0,0,0.7)' },
+  fsBtn:     { padding: '7px 12px', fontSize: 13, backgroundColor: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 6, cursor: 'pointer' },
+  fsContent: { flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: 20 },
 };
 
-const additionalStyles = {
-  quizNotificationContainer: {
-    padding: '14px 16px',
-    backgroundColor: 'rgba(79,70,229,0.06)',
-    borderRadius: '10px',
-    border: '1.5px solid #c7d2fe',
-  },
-};
-
+// CSS animation for typing dots
 if (typeof document !== 'undefined') {
   const style = document.createElement('style');
   style.textContent = `
     @keyframes bounce {
       0%, 60%, 100% { transform: translateY(0); }
-      30%            { transform: translateY(-6px); }
+      30%            { transform: translateY(-5px); }
     }
   `;
   document.head.appendChild(style);
