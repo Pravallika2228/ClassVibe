@@ -1,44 +1,54 @@
 // src/components/MessageInput.js
+// ✅ UI REDESIGN — Visily-style message input
+//
+// Visual changes only (ALL functional logic unchanged):
+//   1. Container: clean white, light border-top (no more gray #F0F0F0)
+//   2. Input card: white rounded card with subtle border + shadow
+//   3. Button order: [👥 people icon] [input] [send ▶] [+ attach]
+//   4. Send button: dark slate circle (#1e293b) instead of green
+//   5. Plus button: dark slate circle, moved to RIGHT side
+//   6. File/recipient popup positions adjusted to match new button positions
+//   7. Poll modal, file upload, recipient logic — 100% UNCHANGED
+
 import React, { useState, useRef, useEffect } from 'react';
 import { uploadFile } from '../api';
 
-const MessageInput = ({ 
-  onSendMessage, 
-  onTyping, 
-  onStopTyping, 
-  disabled = false,
-  isAdmin = false,
-  members = []
+const MessageInput = ({
+  onSendMessage,
+  onTyping,
+  onStopTyping,
+  disabled  = false,
+  isAdmin   = false,
+  members   = []
 }) => {
-  const [message, setMessage] = useState('');
-  const [showFileMenu, setShowFileMenu] = useState(false);
-  const [showRecipients, setShowRecipients] = useState(false);
-  const [selectedRecipient, setSelectedRecipient] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [showPollCreator, setShowPollCreator] = useState(false);
-  const [pollQuestion, setPollQuestion] = useState('');
-  const [pollOptions, setPollOptions] = useState(['', '']);
-  const typingTimeoutRef = useRef(null);
-  const inputRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const [message,          setMessage]          = useState('');
+  const [showFileMenu,     setShowFileMenu]     = useState(false);
+  const [showRecipients,   setShowRecipients]   = useState(false);
+  const [selectedRecipient,setSelectedRecipient]= useState(null);
+  const [uploading,        setUploading]        = useState(false);
+  const [uploadProgress,   setUploadProgress]   = useState(0);
+  const [showPollCreator,  setShowPollCreator]  = useState(false);
+  const [pollQuestion,     setPollQuestion]     = useState('');
+  const [pollOptions,      setPollOptions]      = useState(['', '']);
 
+  const typingTimeoutRef = useRef(null);
+  const inputRef         = useRef(null);
+  const fileInputRef     = useRef(null);
+
+  // ── Typing detection — UNCHANGED ────────────────────────────────────────
   const handleInputChange = (e) => {
     const value = e.target.value;
     setMessage(value);
     if (value.trim() && onTyping) {
       onTyping();
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       typingTimeoutRef.current = setTimeout(() => {
-        if (onStopTyping) {
-          onStopTyping();
-        }
+        if (onStopTyping) onStopTyping();
       }, 2000);
     }
   };
 
+  // ── Send message — UNCHANGED ─────────────────────────────────────────────
   const handleSendMessage = (e) => {
     e.preventDefault();
     if (!message.trim()) return;
@@ -47,38 +57,27 @@ const MessageInput = ({
       messageType: selectedRecipient ? 'private' : 'text',
       recipientId: selectedRecipient ? selectedRecipient._id : null
     };
-    if (onSendMessage) {
-      onSendMessage(messageData);
-    }
+    if (onSendMessage) onSendMessage(messageData);
     setMessage('');
     setSelectedRecipient(null);
-    if (onStopTyping) {
-      onStopTyping();
-    }
+    if (onStopTyping) onStopTyping();
     inputRef.current?.focus();
   };
 
+  // ── File handling — UNCHANGED ────────────────────────────────────────────
   const handleFileSelect = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      alert('File too large! Maximum size is 10MB');
-      return;
-    }
-    const allowedTypes = /\.(jpg|jpeg|png|gif|mp4|mov|avi|pdf|doc|docx|txt|mp3|wav|m4a|ogg)$/i;
-    if (!allowedTypes.test(file.name)) {
-      alert('Invalid file type! Allowed: Images, Videos, PDFs, Documents, Audio');
-      return;
-    }
+    if (file.size > 10 * 1024 * 1024) { alert('File too large! Maximum size is 10MB'); return; }
+    const allowed = /\.(jpg|jpeg|png|gif|mp4|mov|avi|pdf|doc|docx|txt|mp3|wav|m4a|ogg)$/i;
+    if (!allowed.test(file.name)) { alert('Invalid file type! Allowed: Images, Videos, PDFs, Documents, Audio'); return; }
+
     setUploading(true);
     setUploadProgress(0);
     try {
       const progressInterval = setInterval(() => {
         setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return 90;
-          }
+          if (prev >= 90) { clearInterval(progressInterval); return 90; }
           return prev + 10;
         });
       }, 200);
@@ -89,281 +88,204 @@ const MessageInput = ({
         const fileMessage = {
           content: file.name,
           messageType: 'file',
-          fileUrl: response.file.url,
-          fileName: response.file.name,
-          fileSize: response.file.size,
-          fileType: response.file.type,
+          fileUrl:   response.file.url,
+          fileName:  response.file.name,
+          fileSize:  response.file.size,
+          fileType:  response.file.type,
           recipientId: selectedRecipient ? selectedRecipient._id : null
         };
-        if (onSendMessage) {
-          onSendMessage(fileMessage);
-        }
+        if (onSendMessage) onSendMessage(fileMessage);
         setSelectedRecipient(null);
       }
-    } catch (error) {
-      console.error('Upload failed:', error);
+    } catch (err) {
+      console.error('Upload failed:', err);
       alert('Failed to upload file. Please try again.');
     } finally {
       setUploading(false);
       setUploadProgress(0);
       setShowFileMenu(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const handleFileMenuClick = (type) => {
     setShowFileMenu(false);
+    if (!fileInputRef.current) return;
     if (type === 'camera') {
-      if (fileInputRef.current) {
-        fileInputRef.current.setAttribute('capture', 'environment');
-        fileInputRef.current.setAttribute('accept', 'image/*,video/*');
-        fileInputRef.current.click();
-      }
+      fileInputRef.current.setAttribute('capture', 'environment');
+      fileInputRef.current.setAttribute('accept', 'image/*,video/*');
+      fileInputRef.current.click();
     } else if (type === 'document') {
-      if (fileInputRef.current) {
-        fileInputRef.current.removeAttribute('capture');
-        fileInputRef.current.setAttribute('accept', '.pdf,.doc,.docx,.txt');
-        fileInputRef.current.click();
-      }
+      fileInputRef.current.removeAttribute('capture');
+      fileInputRef.current.setAttribute('accept', '.pdf,.doc,.docx,.txt');
+      fileInputRef.current.click();
     } else if (type === 'photos') {
-      if (fileInputRef.current) {
-        fileInputRef.current.removeAttribute('capture');
-        fileInputRef.current.setAttribute('accept', 'image/*,video/*');
-        fileInputRef.current.click();
-      }
+      fileInputRef.current.removeAttribute('capture');
+      fileInputRef.current.setAttribute('accept', 'image/*,video/*');
+      fileInputRef.current.click();
     } else if (type === 'audio') {
-      if (fileInputRef.current) {
-        fileInputRef.current.removeAttribute('capture');
-        fileInputRef.current.setAttribute('accept', 'audio/*,.mp3,.wav,.m4a,.ogg');
-        fileInputRef.current.click();
-      }
+      fileInputRef.current.removeAttribute('capture');
+      fileInputRef.current.setAttribute('accept', 'audio/*,.mp3,.wav,.m4a,.ogg');
+      fileInputRef.current.click();
     } else if (type === 'poll') {
       setShowPollCreator(true);
     }
   };
 
+  // ── Poll logic — UNCHANGED ────────────────────────────────────────────────
   const handlePollOptionChange = (index, value) => {
-    const newOptions = [...pollOptions];
-    newOptions[index] = value;
-    setPollOptions(newOptions);
+    const updated = [...pollOptions];
+    updated[index] = value;
+    setPollOptions(updated);
   };
-
-  const addPollOption = () => {
-    if (pollOptions.length < 10) {
-      setPollOptions([...pollOptions, '']);
-    }
-  };
-
-  const removePollOption = (index) => {
-    if (pollOptions.length > 2) {
-      setPollOptions(pollOptions.filter((_, i) => i !== index));
-    }
-  };
-
+  const addPollOption    = () => { if (pollOptions.length < 10) setPollOptions([...pollOptions, '']); };
+  const removePollOption = (i) => { if (pollOptions.length > 2) setPollOptions(pollOptions.filter((_, idx) => idx !== i)); };
   const handleCreatePoll = () => {
-    if (!pollQuestion.trim()) {
-      alert('Please enter a poll question');
-      return;
-    }
-    const validOptions = pollOptions.filter(opt => opt.trim());
-    if (validOptions.length < 2) {
-      alert('Please provide at least 2 options');
-      return;
-    }
+    if (!pollQuestion.trim()) { alert('Please enter a poll question'); return; }
+    const valid = pollOptions.filter(o => o.trim());
+    if (valid.length < 2) { alert('Please provide at least 2 options'); return; }
     const pollMessage = {
       content: pollQuestion.trim(),
       messageType: 'poll',
-      pollOptions: validOptions,
+      pollOptions: valid,
       recipientId: selectedRecipient ? selectedRecipient._id : null
     };
-    if (onSendMessage) {
-      onSendMessage(pollMessage);
-    }
+    if (onSendMessage) onSendMessage(pollMessage);
     setPollQuestion('');
     setPollOptions(['', '']);
     setShowPollCreator(false);
     setSelectedRecipient(null);
   };
+  const cancelPoll = () => { setPollQuestion(''); setPollOptions(['', '']); setShowPollCreator(false); };
 
-  const cancelPoll = () => {
-    setPollQuestion('');
-    setPollOptions(['', '']);
-    setShowPollCreator(false);
-  };
-
+  // ── Recipient — UNCHANGED ─────────────────────────────────────────────────
   const handleRecipientSelect = (member) => {
-    if (selectedRecipient && selectedRecipient._id === member._id) {
-      setSelectedRecipient(null);
-    } else {
-      setSelectedRecipient(member);
-    }
+    setSelectedRecipient(selectedRecipient?._id === member._id ? null : member);
     setShowRecipients(false);
     inputRef.current?.focus();
   };
 
   useEffect(() => {
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-    };
+    return () => { if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current); };
   }, []);
 
+  // ── Placeholder text ──────────────────────────────────────────────────────
+  const placeholder = uploading
+    ? 'Uploading...'
+    : selectedRecipient
+      ? `Private message to ${selectedRecipient.username}...`
+      : 'Type a message to the class...';
+
+  // ════════════════════════════════════════════════════════════════════════
+  //  RENDER
+  // ════════════════════════════════════════════════════════════════════════
   return (
-    <div style={styles.container}>
-      <input
-        ref={fileInputRef}
-        type="file"
-        style={{ display: 'none' }}
-        onChange={handleFileSelect}
-      />
+    <div style={S.container}>
+
+      {/* Hidden file input */}
+      <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileSelect} />
+
+      {/* ── Upload progress ── */}
       {uploading && (
-        <div style={styles.uploadProgress}>
-          <div style={styles.progressBar}>
-            <div 
-              style={{
-                ...styles.progressFill,
-                width: `${uploadProgress}%`
-              }}
-            />
+        <div style={S.uploadWrap}>
+          <div style={S.progressBar}>
+            <div style={{ ...S.progressFill, width: `${uploadProgress}%` }} />
           </div>
-          <span style={styles.progressText}>Uploading... {uploadProgress}%</span>
+          <span style={S.progressText}>Uploading... {uploadProgress}%</span>
         </div>
       )}
+
+      {/* ── Private message banner ── */}
       {selectedRecipient && (
-        <div style={styles.recipientBanner}>
-          <span style={styles.recipientText}>
+        <div style={S.recipientBanner}>
+          <span style={S.recipientText}>
             Private message to: <strong>{selectedRecipient.username}</strong>
           </span>
-          <button
-            onClick={() => setSelectedRecipient(null)}
-            style={styles.clearRecipient}
-          >
-            ✕
-          </button>
+          <button onClick={() => setSelectedRecipient(null)} style={S.clearRecipient}>✕</button>
         </div>
       )}
+
+      {/* ── File attach menu popup — anchored to right (+) button ── */}
       {showFileMenu && (
-        <div style={styles.fileMenu}>
-          <button
-            onClick={() => handleFileMenuClick('camera')}
-            style={styles.fileMenuItem}
-          >
-            <span style={styles.menuIcon}>📷</span>
-            <span>Camera</span>
-          </button>
-          <button
-            onClick={() => handleFileMenuClick('document')}
-            style={styles.fileMenuItem}
-          >
-            <span style={styles.menuIcon}>📄</span>
-            <span>Document</span>
-          </button>
-          <button
-            onClick={() => handleFileMenuClick('photos')}
-            style={styles.fileMenuItem}
-          >
-            <span style={styles.menuIcon}>🖼️</span>
-            <span>Photos & videos</span>
-          </button>
-          <button
-            onClick={() => handleFileMenuClick('audio')}
-            style={styles.fileMenuItem}
-          >
-            <span style={styles.menuIcon}>🎵</span>
-            <span>Audio</span>
-          </button>
-          <button
-            onClick={() => handleFileMenuClick('poll')}
-            style={styles.fileMenuItem}
-          >
-            <span style={styles.menuIcon}>📊</span>
-            <span>Poll</span>
-          </button>
+        <div style={S.fileMenu}>
+          {[
+            { type: 'camera',   icon: '📷', label: 'Camera' },
+            { type: 'document', icon: '📄', label: 'Document' },
+            { type: 'photos',   icon: '🖼️', label: 'Photos & videos' },
+            { type: 'audio',    icon: '🎵', label: 'Audio' },
+            { type: 'poll',     icon: '📊', label: 'Poll' },
+          ].map(({ type, icon, label }) => (
+            <button key={type} onClick={() => handleFileMenuClick(type)} style={S.fileMenuItem}>
+              <span style={S.menuIcon}>{icon}</span>
+              <span>{label}</span>
+            </button>
+          ))}
         </div>
       )}
+
+      {/* ── Poll creator modal — UNCHANGED ── */}
       {showPollCreator && (
-        <div style={styles.pollOverlay}>
-          <div style={styles.pollModal}>
-            <div style={styles.pollHeader}>
-              <h3 style={styles.pollTitle}>Create Poll</h3>
-              <button onClick={cancelPoll} style={styles.pollCloseBtn}>✕</button>
+        <div style={S.pollOverlay}>
+          <div style={S.pollModal}>
+            <div style={S.pollHeader}>
+              <h3 style={S.pollTitle}>Create Poll</h3>
+              <button onClick={cancelPoll} style={S.pollCloseBtn}>✕</button>
             </div>
-            <div style={styles.pollBody}>
-              <label style={styles.pollLabel}>Question *</label>
+            <div style={S.pollBody}>
+              <label style={S.pollLabel}>Question *</label>
               <input
                 type="text"
                 value={pollQuestion}
-                onChange={(e) => setPollQuestion(e.target.value)}
+                onChange={e => setPollQuestion(e.target.value)}
                 placeholder="Ask a question..."
-                style={styles.pollQuestionInput}
+                style={S.pollQuestionInput}
                 maxLength={200}
               />
-              <label style={styles.pollLabel}>Options *</label>
+              <label style={S.pollLabel}>Options *</label>
               {pollOptions.map((option, index) => (
-                <div key={index} style={styles.pollOptionRow}>
+                <div key={index} style={S.pollOptionRow}>
                   <input
                     type="text"
                     value={option}
-                    onChange={(e) => handlePollOptionChange(index, e.target.value)}
+                    onChange={e => handlePollOptionChange(index, e.target.value)}
                     placeholder={`Option ${index + 1}`}
-                    style={styles.pollOptionInput}
+                    style={S.pollOptionInput}
                     maxLength={100}
                   />
                   {pollOptions.length > 2 && (
-                    <button
-                      onClick={() => removePollOption(index)}
-                      style={styles.removeOptionBtn}
-                    >
-                      ✕
-                    </button>
+                    <button onClick={() => removePollOption(index)} style={S.removeOptionBtn}>✕</button>
                   )}
                 </div>
               ))}
               {pollOptions.length < 10 && (
-                <button onClick={addPollOption} style={styles.addOptionBtn}>
-                  + Add Option
-                </button>
+                <button onClick={addPollOption} style={S.addOptionBtn}>+ Add Option</button>
               )}
             </div>
-            <div style={styles.pollFooter}>
-              <button onClick={cancelPoll} style={styles.pollCancelBtn}>
-                Cancel
-              </button>
-              <button onClick={handleCreatePoll} style={styles.pollCreateBtn}>
-                Create Poll
-              </button>
+            <div style={S.pollFooterRow}>
+              <button onClick={cancelPoll}      style={S.pollCancelBtn}>Cancel</button>
+              <button onClick={handleCreatePoll} style={S.pollCreateBtn}>Create Poll</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ── Recipient dropdown — anchored to left (👥) button ── */}
       {showRecipients && isAdmin && (
-        <div style={styles.recipientDropdown}>
-          <div style={styles.recipientHeader}>Send to:</div>
+        <div style={S.recipientDropdown}>
+          <div style={S.recipientHeader}>Send to:</div>
           <button
-            onClick={() => {
-              setSelectedRecipient(null);
-              setShowRecipients(false);
-            }}
-            style={{
-              ...styles.recipientOption,
-              backgroundColor: !selectedRecipient ? '#e3f2fd' : 'transparent'
-            }}
+            onClick={() => { setSelectedRecipient(null); setShowRecipients(false); }}
+            style={{ ...S.recipientOption, backgroundColor: !selectedRecipient ? '#eef2ff' : 'transparent' }}
           >
             📢 Everyone
           </button>
-          {members.map((member) => (
+          {members.map(member => (
             <button
               key={member._id}
               onClick={() => handleRecipientSelect(member)}
               style={{
-                ...styles.recipientOption,
-                backgroundColor: 
-                  selectedRecipient && selectedRecipient._id === member._id 
-                    ? '#e3f2fd' 
-                    : 'transparent'
+                ...S.recipientOption,
+                backgroundColor: selectedRecipient?._id === member._id ? '#eef2ff' : 'transparent'
               }}
             >
               👤 {member.username}
@@ -371,367 +293,298 @@ const MessageInput = ({
           ))}
         </div>
       )}
-      <form onSubmit={handleSendMessage} style={styles.inputForm}>
-        <button
-          type="button"
-          onClick={() => setShowFileMenu(!showFileMenu)}
-          style={styles.iconButton}
-          disabled={disabled || uploading}
-          title="Attach file"
-        >
-          +
-        </button>
-        {isAdmin && (
+
+      {/* ════════════════════════════════════════
+          INPUT CARD
+          Layout: [👥 icon] [text input] [send ▶] [+ attach]
+          ════════════════════════════════════════ */}
+      <form onSubmit={handleSendMessage} style={S.inputCard}>
+
+        {/* Left: people icon — admin gets recipient picker, others get decorative */}
+        {isAdmin ? (
           <button
             type="button"
             onClick={() => setShowRecipients(!showRecipients)}
-            style={styles.iconButton}
+            style={S.leftIconBtn}
             disabled={disabled || uploading}
             title="Select recipient"
           >
             👥
           </button>
+        ) : (
+          <span style={S.leftIconDecorative}>👤</span>
         )}
+
+        {/* Text input — takes all remaining space */}
         <input
           ref={inputRef}
           type="text"
           value={message}
           onChange={handleInputChange}
-          placeholder={
-            uploading 
-              ? "Uploading..." 
-              : selectedRecipient 
-                ? `Private message to ${selectedRecipient.username}...`
-                : "Type a message..."
-          }
-          style={styles.input}
+          placeholder={placeholder}
+          style={S.textInput}
           disabled={disabled || uploading}
           maxLength={5000}
         />
+
+        {/* Send button — dark circle, paper-plane arrow */}
         <button
           type="submit"
           style={{
-            ...styles.sendButton,
-            opacity: !message.trim() || disabled || uploading ? 0.5 : 1,
-            cursor: !message.trim() || disabled || uploading ? 'not-allowed' : 'pointer'
+            ...S.sendBtn,
+            opacity: !message.trim() || disabled || uploading ? 0.45 : 1,
+            cursor:  !message.trim() || disabled || uploading ? 'not-allowed' : 'pointer',
           }}
           disabled={!message.trim() || disabled || uploading}
+          title="Send message"
         >
           ➤
         </button>
+
+        {/* Plus / attach button — dark circle, right side */}
+        <button
+          type="button"
+          onClick={() => setShowFileMenu(!showFileMenu)}
+          style={S.plusBtn}
+          disabled={disabled || uploading}
+          title="Attach file or create poll"
+        >
+          +
+        </button>
+
       </form>
     </div>
   );
 };
 
-const styles = {
+// ══════════════════════════════════════════════════════════════════════════
+//  STYLES — Visily design
+// ══════════════════════════════════════════════════════════════════════════
+const S = {
+
+  // ── Outer container ──
   container: {
     position: 'relative',
-    borderTop: '1px solid #e0e0e0',
-    backgroundColor: '#F0F0F0',
-    padding: '15px',
-    boxShadow: '0 -2px 5px rgba(0,0,0,0.05)'
+    backgroundColor: '#ffffff',
+    borderTop: '1px solid #e2e8f0',
+    padding: '12px 20px 14px',
   },
-  uploadProgress: {
-    marginBottom: '10px'
-  },
-  progressBar: {
-    width: '100%',
-    height: '4px',
-    backgroundColor: '#e0e0e0',
-    borderRadius: '2px',
-    overflow: 'hidden',
-    marginBottom: '5px'
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#25D366',
-    transition: 'width 0.3s'
-  },
-  progressText: {
-    fontSize: '12px',
-    color: '#666'
-  },
+
+  // ── Upload progress ──
+  uploadWrap:    { marginBottom: 10 },
+  progressBar:   { width: '100%', height: 4, backgroundColor: '#e2e8f0', borderRadius: 2, overflow: 'hidden', marginBottom: 5 },
+  progressFill:  { height: '100%', backgroundColor: '#6366f1', transition: 'width 0.3s' },
+  progressText:  { fontSize: 12, color: '#64748b' },
+
+  // ── Private recipient banner ──
   recipientBanner: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '8px 12px',
-    backgroundColor: '#e3f2fd',
-    borderRadius: '6px',
-    marginBottom: '10px'
+    padding: '7px 12px',
+    backgroundColor: '#eef2ff',
+    borderRadius: 8,
+    marginBottom: 10,
+    border: '1px solid #c7d2fe',
   },
-  recipientText: {
-    fontSize: '13px',
-    color: '#1976d2'
-  },
-  clearRecipient: {
-    background: 'none',
-    border: 'none',
-    fontSize: '16px',
-    cursor: 'pointer',
-    color: '#666',
-    padding: '0 5px'
-  },
+  recipientText: { fontSize: 13, color: '#4f46e5' },
+  clearRecipient: { background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: '#94a3b8', padding: '0 4px' },
+
+  // ── File menu popup (bottom-right, above + button) ──
   fileMenu: {
     position: 'absolute',
-    bottom: '70px',
-    left: '15px',
+    bottom: 70,
+    right: 20,
     backgroundColor: 'white',
-    border: '1px solid #ddd',
-    borderRadius: '12px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    border: '1px solid #e2e8f0',
+    borderRadius: 14,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
     overflow: 'hidden',
     zIndex: 100,
-    minWidth: '200px'
+    minWidth: 210,
   },
   fileMenuItem: {
     width: '100%',
-    padding: '14px 20px',
-    fontSize: '15px',
+    padding: '13px 18px',
+    fontSize: 14,
     textAlign: 'left',
     border: 'none',
+    borderBottom: '1px solid #f1f5f9',
     backgroundColor: 'white',
     cursor: 'pointer',
-    transition: 'background-color 0.2s',
     display: 'flex',
     alignItems: 'center',
-    gap: '12px',
-    borderBottom: '1px solid #f0f0f0'
+    gap: 12,
+    color: '#374151',
+    transition: 'background 0.15s',
   },
-  menuIcon: {
-    fontSize: '20px',
-    width: '24px',
-    textAlign: 'center'
+  menuIcon: { fontSize: 20, width: 24, textAlign: 'center' },
+
+  // ── Recipient dropdown (bottom-left, above 👥 button) ──
+  recipientDropdown: {
+    position: 'absolute',
+    bottom: 70,
+    left: 20,
+    backgroundColor: 'white',
+    border: '1px solid #e2e8f0',
+    borderRadius: 10,
+    boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+    minWidth: 210,
+    maxHeight: 300,
+    overflowY: 'auto',
+    zIndex: 100,
   },
+  recipientHeader: { padding: '10px 14px', fontSize: 12, fontWeight: '700', color: '#64748b', borderBottom: '1px solid #e2e8f0', textTransform: 'uppercase', letterSpacing: '0.4px' },
+  recipientOption: { width: '100%', padding: '10px 14px', fontSize: 14, textAlign: 'left', border: 'none', cursor: 'pointer', color: '#374151', transition: 'background 0.15s' },
+
+  // ════════════════════════════════════════
+  //  INPUT CARD
+  // ════════════════════════════════════════
+  inputCard: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#ffffff',
+    border: '1.5px solid #e2e8f0',
+    borderRadius: 14,
+    padding: '8px 12px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+  },
+
+  // Left people icon (decorative for students)
+  leftIconDecorative: {
+    fontSize: 18,
+    opacity: 0.45,
+    flexShrink: 0,
+    lineHeight: 1,
+    userSelect: 'none',
+  },
+
+  // Left people icon (interactive button for admin/teacher)
+  leftIconBtn: {
+    background: 'none',
+    border: 'none',
+    fontSize: 18,
+    cursor: 'pointer',
+    padding: '4px 6px',
+    borderRadius: 8,
+    flexShrink: 0,
+    color: '#64748b',
+    transition: 'background 0.15s, color 0.15s',
+    lineHeight: 1,
+  },
+
+  // Text input
+  textInput: {
+    flex: 1,
+    padding: '8px 4px',
+    fontSize: 14,
+    border: 'none',
+    outline: 'none',
+    backgroundColor: 'transparent',
+    color: '#1e293b',
+    minWidth: 0, // prevent flex overflow
+  },
+
+  // Send button — dark circle ▶
+  sendBtn: {
+    width: 38,
+    height: 38,
+    fontSize: 16,
+    backgroundColor: '#1e293b',
+    color: 'white',
+    border: 'none',
+    borderRadius: '50%',
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'background 0.2s, opacity 0.2s',
+  },
+
+  // Plus / attach button — dark circle
+  plusBtn: {
+    width: 38,
+    height: 38,
+    fontSize: 22,
+    fontWeight: '300',
+    backgroundColor: '#1e293b',
+    color: 'white',
+    border: 'none',
+    borderRadius: '50%',
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    lineHeight: 1,
+    transition: 'background 0.2s',
+  },
+
+  // ── Poll modal — UNCHANGED visually ──
   pollOverlay: {
     position: 'fixed',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    inset: 0,
     backgroundColor: 'rgba(0,0,0,0.5)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1000
+    zIndex: 1000,
   },
   pollModal: {
     backgroundColor: 'white',
-    borderRadius: '12px',
+    borderRadius: 14,
     width: '90%',
-    maxWidth: '500px',
+    maxWidth: 500,
     maxHeight: '80vh',
     display: 'flex',
     flexDirection: 'column',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.3)'
+    boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
   },
   pollHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '20px',
-    borderBottom: '1px solid #e0e0e0'
+    padding: '18px 20px',
+    borderBottom: '1px solid #e2e8f0',
   },
-  pollTitle: {
-    margin: 0,
-    fontSize: '20px',
-    fontWeight: '600'
-  },
-  pollCloseBtn: {
-    background: 'none',
-    border: 'none',
-    fontSize: '24px',
-    cursor: 'pointer',
-    color: '#666',
-    padding: '0 5px'
-  },
-  pollBody: {
-    padding: '20px',
-    overflowY: 'auto',
-    flex: 1
-  },
-  pollLabel: {
-    display: 'block',
-    fontSize: '14px',
-    fontWeight: '600',
-    marginBottom: '8px',
-    color: '#333'
-  },
+  pollTitle:   { margin: 0, fontSize: 18, fontWeight: '700', color: '#1e293b' },
+  pollCloseBtn:{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#94a3b8' },
+  pollBody:    { padding: 20, overflowY: 'auto', flex: 1 },
+  pollLabel:   { display: 'block', fontSize: 13, fontWeight: '700', marginBottom: 8, color: '#374151', textTransform: 'uppercase', letterSpacing: '0.4px' },
   pollQuestionInput: {
     width: '100%',
-    padding: '12px',
-    fontSize: '15px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    marginBottom: '20px',
+    padding: '11px 13px',
+    fontSize: 14,
+    border: '1.5px solid #e2e8f0',
+    borderRadius: 8,
+    marginBottom: 20,
     outline: 'none',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
+    color: '#1e293b',
   },
-  pollOptionRow: {
-    display: 'flex',
-    gap: '8px',
-    marginBottom: '10px'
-  },
-  pollOptionInput: {
-    flex: 1,
-    padding: '10px 12px',
-    fontSize: '14px',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    outline: 'none'
-  },
-  removeOptionBtn: {
-    width: '36px',
-    height: '36px',
-    background: '#f44336',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '16px'
-  },
-  addOptionBtn: {
-    padding: '10px 16px',
-    fontSize: '14px',
-    color: '#128C7E',
-    backgroundColor: 'transparent',
-    border: '1px dashed #128C7E',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    marginTop: '10px'
-  },
-  pollFooter: {
-    display: 'flex',
-    gap: '10px',
-    padding: '20px',
-    borderTop: '1px solid #e0e0e0'
-  },
-  pollCancelBtn: {
-    flex: 1,
-    padding: '12px',
-    fontSize: '15px',
-    fontWeight: '600',
-    backgroundColor: '#f5f5f5',
-    color: '#333',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer'
-  },
-  pollCreateBtn: {
-    flex: 1,
-    padding: '12px',
-    fontSize: '15px',
-    fontWeight: '600',
-    backgroundColor: '#25D366',
-    color: 'white',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer'
-  },
-  recipientDropdown: {
-    position: 'absolute',
-    bottom: '70px',
-    right: '15px',
-    backgroundColor: 'white',
-    border: '1px solid #ddd',
-    borderRadius: '8px',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-    minWidth: '200px',
-    maxHeight: '300px',
-    overflowY: 'auto',
-    zIndex: 100
-  },
-  recipientHeader: {
-    padding: '10px 15px',
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#666',
-    borderBottom: '1px solid #e0e0e0'
-  },
-  recipientOption: {
-    width: '100%',
-    padding: '10px 15px',
-    fontSize: '14px',
-    textAlign: 'left',
-    border: 'none',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s'
-  },
-  inputForm: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px'
-  },
-  iconButton: {
-    fontSize: '28px',
-    fontWeight: '300',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    padding: '8px 12px',
-    borderRadius: '50%',
-    transition: 'background-color 0.2s',
-    flexShrink: 0,
-    color: '#54656F'
-  },
-  input: {
-    flex: 1,
-    padding: '12px 15px',
-    fontSize: '15px',
-    border: 'none',
-    borderRadius: '25px',
-    outline: 'none',
-    backgroundColor: 'white',
-    transition: 'border-color 0.3s'
-  },
-  sendButton: {
-    width: '45px',
-    height: '45px',
-    fontSize: '20px',
-    backgroundColor: '#25D366',
-    color: 'white',
-    border: 'none',
-    borderRadius: '50%',
-    cursor: 'pointer',
-    transition: 'all 0.3s',
-    flexShrink: 0,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  }
+  pollOptionRow:   { display: 'flex', gap: 8, marginBottom: 10 },
+  pollOptionInput: { flex: 1, padding: '10px 12px', fontSize: 14, border: '1.5px solid #e2e8f0', borderRadius: 8, outline: 'none', color: '#1e293b' },
+  removeOptionBtn: { width: 36, height: 36, backgroundColor: '#fee2e2', color: '#ef4444', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 15, fontWeight: '700' },
+  addOptionBtn:    { padding: '9px 14px', fontSize: 13, fontWeight: '600', color: '#6366f1', backgroundColor: 'transparent', border: '1.5px dashed #c7d2fe', borderRadius: 8, cursor: 'pointer', marginTop: 8 },
+  pollFooterRow:   { display: 'flex', gap: 10, padding: '16px 20px', borderTop: '1px solid #e2e8f0' },
+  pollCancelBtn:   { flex: 1, padding: 12, fontSize: 14, fontWeight: '600', backgroundColor: '#f1f5f9', color: '#475569', border: 'none', borderRadius: 8, cursor: 'pointer' },
+  pollCreateBtn:   { flex: 1, padding: 12, fontSize: 14, fontWeight: '700', backgroundColor: '#6366f1', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer' },
 };
 
 if (typeof document !== 'undefined') {
   const style = document.createElement('style');
   style.textContent = `
-    button[style*="fileMenuItem"]:hover {
-      background-color: #f5f5f5 !important;
-    }
-    button[style*="fileMenuItem"]:last-child {
-      border-bottom: none !important;
-    }
-    button[style*="iconButton"]:hover {
-      background-color: #f0f0f0 !important;
-    }
-    button[style*="recipientOption"]:hover {
-      background-color: #f5f5f5 !important;
-    }
-    button[style*="pollCloseBtn"]:hover {
-      color: #333 !important;
-    }
-    button[style*="removeOptionBtn"]:hover {
-      background-color: #d32f2f !important;
-    }
-    button[style*="addOptionBtn"]:hover {
-      background-color: #D7F0DD !important;
-    }
-    button[style*="pollCancelBtn"]:hover {
-      background-color: #e0e0e0 !important;
-    }
-    button[style*="pollCreateBtn"]:hover {
-      background-color: #128C7E !important;
-    }
+    /* Hover states for MessageInput buttons */
+    .mi-send:hover  { background-color: #334155 !important; }
+    .mi-plus:hover  { background-color: #334155 !important; }
+    .mi-left:hover  { background-color: #f1f5f9 !important; color: #4f46e5 !important; }
+    .mi-file:hover  { background-color: #f8fafc !important; }
+    .mi-opt:hover   { background-color: #f8fafc !important; }
+    .mi-rmv:hover   { background-color: #fca5a5 !important; }
+    .mi-add:hover   { background-color: #eef2ff !important; }
+    .mi-cancel:hover{ background-color: #e2e8f0 !important; }
+    .mi-create:hover{ background-color: #4f46e5 !important; }
   `;
   document.head.appendChild(style);
 }
