@@ -29,6 +29,7 @@ const ChatArea = ({
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [contextMenu,      setContextMenu]      = useState(null);
   const [searchQuery,      setSearchQuery]      = useState('');
+  const [showSearch,       setShowSearch]       = useState(false);  // ← search bar hidden by default
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editText,         setEditText]         = useState('');
   const [fullscreenMedia,  setFullscreenMedia]  = useState(null);
@@ -374,25 +375,52 @@ const ChatArea = ({
   return (
     <div style={S.chatArea}>
 
-      {/* ── Search bar ── */}
-      <div style={S.searchBar}>
-        <div style={S.searchWrap}>
-          <span style={{ fontSize: 13, opacity: 0.45 }}>🔍</span>
-          <input
-            type="text"
-            placeholder="Search messages..."
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            style={S.searchInput}
-          />
-          {searchQuery && (
-            <button onClick={() => setSearchQuery('')} style={S.clearBtn}>✕</button>
-          )}
+      {/* ── Search: collapsed icon strip (default) ── */}
+      {!showSearch && (
+        <div style={S.chatTopStrip}>
+          <button
+            style={S.searchIconBtn}
+            onClick={() => setShowSearch(true)}
+            title="Search messages"
+          >
+            <span style={{ fontSize: 14 }}>🔍</span>
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>Search</span>
+          </button>
         </div>
-        {searchQuery && (
-          <span style={S.searchCount}>{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
-        )}
-      </div>
+      )}
+
+      {/* ── Search: expanded full bar (visible after click) ── */}
+      {showSearch && (
+        <div style={S.searchBar}>
+          <div style={S.searchWrap}>
+            <span style={{ fontSize: 13, opacity: 0.45 }}>🔍</span>
+            <input
+              type="text"
+              placeholder="Search messages..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={S.searchInput}
+              autoFocus
+              onKeyDown={e => {
+                if (e.key === 'Escape') { setShowSearch(false); setSearchQuery(''); }
+              }}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} style={S.clearBtn}>✕</button>
+            )}
+          </div>
+          {searchQuery && (
+            <span style={S.searchCount}>{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
+          )}
+          <button
+            style={S.closeSearchBtn}
+            onClick={() => { setShowSearch(false); setSearchQuery(''); }}
+            title="Close search"
+          >
+            Close
+          </button>
+        </div>
+      )}
 
       {/* ── Leaderboard (arrow or full bar) ── */}
       {renderLeaderboard()}
@@ -686,12 +714,49 @@ const S = {
   // Layout
   chatArea:    { flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: '#f8fafc', position: 'relative' },
 
-  // Search bar
-  searchBar:   { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', flexShrink: 0 },
+  // ── Search icon strip (collapsed — default state) ──
+  chatTopStrip: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    padding: '5px 14px',
+    backgroundColor: '#ffffff',
+    borderBottom: '1px solid #f1f5f9',
+    flexShrink: 0,
+    minHeight: 36,
+  },
+  searchIconBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    background: 'none',
+    border: '1px solid #e2e8f0',
+    borderRadius: 8,
+    padding: '4px 10px',
+    cursor: 'pointer',
+    color: '#64748b',
+    transition: 'background 0.15s',
+    fontSize: 13,
+  },
+
+  // ── Search bar (expanded state) ──
+  searchBar:   { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', backgroundColor: '#fff', borderBottom: '1px solid #e2e8f0', flexShrink: 0 },
   searchWrap:  { flex: 1, display: 'flex', alignItems: 'center', gap: 8, backgroundColor: '#f1f5f9', borderRadius: 8, padding: '0 12px', border: '1px solid #e2e8f0' },
   searchInput: { flex: 1, padding: '8px 0', fontSize: 13, border: 'none', outline: 'none', backgroundColor: 'transparent', color: '#1e293b' },
   clearBtn:    { background: 'none', border: 'none', fontSize: 14, cursor: 'pointer', color: '#94a3b8', padding: '2px 4px' },
   searchCount: { fontSize: 12, color: '#64748b', whiteSpace: 'nowrap', fontWeight: '500' },
+  closeSearchBtn: {
+    padding: '6px 12px',
+    fontSize: 12,
+    fontWeight: '600',
+    backgroundColor: '#f1f5f9',
+    color: '#475569',
+    border: '1px solid #e2e8f0',
+    borderRadius: 6,
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  },
 
   // Messages container
   msgContainer: { flex: 1, overflowY: 'auto', padding: '20px 20px', display: 'flex', flexDirection: 'column', gap: 2 },

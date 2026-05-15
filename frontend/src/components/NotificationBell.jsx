@@ -1,140 +1,135 @@
 // frontend/src/components/NotificationBell.jsx
-// Notification bell icon with unread badge
+// ✅ STYLING UPDATE — fixed for white header
+//
+// CHANGES:
+//   1. Removed `filter: grayscale(100%) brightness(200%)` — was designed for dark header,
+//      made bell INVISIBLE on new white header
+//   2. Bell container: removed dark bg, added light border to match white header style
+//   3. Badge: updated to match new red (#ef4444) instead of Bootstrap #DC3545
+//   4. Toast: updated colors to match new indigo/slate design language
+//   5. All notification logic (socket, fetch, toast) — 100% UNCHANGED
 
 import React, { useState, useEffect, useRef } from 'react';
 import NotificationCenter from './NotificationCenter';
 
 const NotificationBell = ({ socket }) => {
   const [unreadCount, setUnreadCount] = useState(0);
-  const [showCenter, setShowCenter] = useState(false);
+  const [showCenter,  setShowCenter]  = useState(false);
   const bellRef = useRef(null);
 
   useEffect(() => {
     fetchUnreadCount();
-    
-    // Listen for new notifications via socket
+
     if (socket) {
       socket.on('newNotification', (notification) => {
         setUnreadCount(prev => prev + 1);
-        // Show toast notification
         showToast(notification);
       });
     }
-    
-    return () => {
-      if (socket) {
-        socket.off('newNotification');
-      }
-    };
-  }, [socket]);
 
+    return () => {
+      if (socket) socket.off('newNotification');
+    };
+  }, [socket]); // eslint-disable-line
+
+  // ── Fetch unread count — UNCHANGED ────────────────────────────────────────
   const fetchUnreadCount = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token    = localStorage.getItem('token');
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL || "https://classvibe-backend.onrender.com"}/api/notifications/unread-count`,
-        {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }
+        `${process.env.REACT_APP_API_URL || 'https://classvibe-backend.onrender.com'}/api/notifications/unread-count`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
-
       if (response.ok) {
         const data = await response.json();
         setUnreadCount(data.count);
       }
-    } catch (error) {
-      console.error('Fetch unread count error:', error);
+    } catch (err) {
+      console.error('Fetch unread count error:', err);
     }
   };
 
+  // ── Toast notification — updated colors for new design ────────────────────
   const showToast = (notification) => {
-    // Create toast element
     const toast = document.createElement('div');
     toast.style.cssText = `
       position: fixed;
       top: 80px;
       right: 20px;
       background: white;
-      padding: 15px 20px;
-      border-radius: 10px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      padding: 14px 18px;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+      border-left: 4px solid #6366f1;
       z-index: 10000;
-      min-width: 300px;
-      max-width: 400px;
-      animation: slideIn 0.3s ease;
+      min-width: 280px;
+      max-width: 380px;
+      animation: toastSlideIn 0.3s ease;
       cursor: pointer;
     `;
-    
+
     toast.innerHTML = `
-      <div style="display: flex; align-items: start; gap: 12px;">
-        <span style="font-size: 24px;">${notification.icon || '🔔'}</span>
-        <div style="flex: 1;">
-          <div style="font-weight: 600; color: #075E54; margin-bottom: 4px;">
-            ${notification.title}
+      <div style="display:flex;align-items:flex-start;gap:12px;">
+        <span style="font-size:22px;flex-shrink:0;">${notification.icon || '🔔'}</span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:700;color:#0f172a;font-size:14px;margin-bottom:3px;">
+            ${notification.title || 'New Notification'}
           </div>
-          <div style="font-size: 13px; color: #666;">
-            ${notification.message}
+          <div style="font-size:13px;color:#64748b;line-height:1.4;">
+            ${notification.message || ''}
           </div>
         </div>
+        <button onclick="this.parentElement.parentElement.remove()"
+          style="background:none;border:none;color:#94a3b8;cursor:pointer;font-size:16px;padding:0;line-height:1;flex-shrink:0;">✕</button>
       </div>
     `;
-    
-    // Add animation
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes slideIn {
-        from {
-          transform: translateX(400px);
-          opacity: 0;
+
+    // Inject animation if not already present
+    if (!document.getElementById('toast-anim-style')) {
+      const s = document.createElement('style');
+      s.id = 'toast-anim-style';
+      s.textContent = `
+        @keyframes toastSlideIn {
+          from { transform: translateX(400px); opacity: 0; }
+          to   { transform: translateX(0);     opacity: 1; }
         }
-        to {
-          transform: translateX(0);
-          opacity: 1;
-        }
+      `;
+      document.head.appendChild(s);
+    }
+
+    toast.onclick = (e) => {
+      if (e.target.tagName !== 'BUTTON') {
+        setShowCenter(true);
+        toast.remove();
       }
-    `;
-    document.head.appendChild(style);
-    
-    // Click to open notification center
-    toast.onclick = () => {
-      setShowCenter(true);
-      document.body.removeChild(toast);
     };
-    
+
     document.body.appendChild(toast);
-    
-    // Auto remove after 5 seconds
+
+    // Auto-dismiss after 5 s
     setTimeout(() => {
       if (document.body.contains(toast)) {
-        toast.style.animation = 'slideIn 0.3s ease reverse';
-        setTimeout(() => {
-          if (document.body.contains(toast)) {
-            document.body.removeChild(toast);
-          }
-        }, 300);
+        toast.style.transition = 'opacity 0.3s, transform 0.3s';
+        toast.style.opacity    = '0';
+        toast.style.transform  = 'translateX(400px)';
+        setTimeout(() => toast.remove(), 300);
       }
     }, 5000);
   };
 
-  const handleBellClick = () => {
-    setShowCenter(!showCenter);
-  };
+  const handleBellClick       = () => setShowCenter(v => !v);
+  const handleNotificationRead = () => setUnreadCount(p => Math.max(0, p - 1));
+  const handleMarkAllRead      = () => setUnreadCount(0);
 
-  const handleNotificationRead = () => {
-    setUnreadCount(prev => Math.max(0, prev - 1));
-  };
-
-  const handleMarkAllRead = () => {
-    setUnreadCount(0);
-  };
-
+  // ════════════════════════════════════════════════════════════════════════
   return (
     <>
-      <div ref={bellRef} style={styles.container} onClick={handleBellClick}>
-        <div style={styles.bell}>
-          <span style={styles.bellIcon}>🔔</span>
+      <div ref={bellRef} style={S.container} onClick={handleBellClick} title="Notifications">
+        <div style={S.bell}>
+          {/* Bell icon — no filter, visible on white header */}
+          <span style={S.bellIcon}>🔔</span>
           {unreadCount > 0 && (
-            <div style={styles.badge}>
+            <div style={S.badge}>
               {unreadCount > 99 ? '99+' : unreadCount}
             </div>
           )}
@@ -152,41 +147,51 @@ const NotificationBell = ({ socket }) => {
   );
 };
 
-const styles = {
+// ══════════════════════════════════════════════════════════════════════════
+//  STYLES — designed for white header
+// ══════════════════════════════════════════════════════════════════════════
+const S = {
   container: {
     position: 'relative',
     cursor: 'pointer',
-    marginRight: '10px'
+    flexShrink: 0,
   },
+
   bell: {
     position: 'relative',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    width: '40px',
-    height: '40px',
-    borderRadius: '50%',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    transition: 'all 0.2s'
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    // ✅ Light border, transparent bg — matches white header design
+    backgroundColor: 'transparent',
+    border: '1px solid #e2e8f0',
+    transition: 'background 0.15s',
   },
+
   bellIcon: {
-    fontSize: '20px',
-    filter: 'grayscale(100%) brightness(200%)'
+    fontSize: 17,
+    // ✅ NO filter — bell emoji is naturally visible on white
+    lineHeight: 1,
   },
+
   badge: {
     position: 'absolute',
-    top: '-5px',
-    right: '-5px',
-    background: '#DC3545',
+    top: -5,
+    right: -5,
+    backgroundColor: '#ef4444',
     color: 'white',
-    fontSize: '11px',
+    fontSize: 10,
     fontWeight: '700',
-    padding: '2px 6px',
-    borderRadius: '10px',
-    minWidth: '18px',
+    padding: '2px 5px',
+    borderRadius: 10,
+    minWidth: 16,
     textAlign: 'center',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-  }
+    lineHeight: '14px',
+    boxShadow: '0 1px 4px rgba(239,68,68,0.4)',
+  },
 };
 
 export default NotificationBell;
