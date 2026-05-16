@@ -346,3 +346,4 @@ const S = {
 };
 
 export default PollComponent;
+
