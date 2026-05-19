@@ -24,6 +24,7 @@ import './App.css';
 import QuizHost from './components/QuizHost';
 import QuizWaitingRoom from './components/QuizWaitingRoom';
 import QuizPlayer from './components/QuizPlayer';
+import Footer from './components/Footer';
 
 function App() {
   const [user, setUser] = useState(null);

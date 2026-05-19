@@ -1,16 +1,23 @@
 // frontend/src/components/Header.js
-// ✅ UI UPDATE v2
+// ✅ UI UPDATE v3
 //
-// CHANGES:
-//   1. Brand row: ClassVibe logo (left) + user profile (right) — name, role, avatar
-//      → Matches Image 1 reference ("Teacher Username / Teacher" + avatar circle)
-//      → Pass `currentUser` prop from App.js (optional, degrades gracefully)
-//   2. Search icon 🔍 added to session bar between End/Leave button and ⋮
-//      → Teacher bar: LIVE | name | View PIN & QR | Live Analytics | End Session | 🔍 | ⋮
-//      → Student bar: 💬 | name | SESSION ACTIVE | View PIN | 🔍 | ⋮
-//      → Clicking 🔍 dispatches window.CustomEvent('toggleChatSearch')
-//         ChatArea listens for this — no App.js prop drilling needed
-//   3. All existing props/logic unchanged
+// CHANGES vs v2:
+//   1. User profile SELF-READS from localStorage
+//      → No longer depends on App.js passing `currentUser` prop
+//      → If prop IS passed → use it (prop takes priority)
+//      → If prop NOT passed → reads from localStorage.getItem('user')
+//      → Same pattern Sidebar.js already uses
+//
+//   2. "View Session PIN & QR" ALWAYS shows when inside a session
+//      → Previously only rendered when `onViewPin` prop was wired in App.js
+//      → Now: always shows when groupName exists
+//      → Click logic:
+//          a) If `onViewPin` prop is provided → call it (App.js handles modal)
+//          b) Else → show built-in PIN/QR modal inside Header
+//      → Built-in modal reads PIN + QR from new optional `group` prop
+//         (pass currentGroup from App.js like: <Header group={currentGroup} .../>)
+//
+//   3. All existing props/logic/styles UNCHANGED
 
 import React, { useState, useEffect } from "react";
 import NotificationBell from './NotificationBell';
@@ -19,9 +26,9 @@ const Header = ({
   // ── Existing props — all kept ──
   onEndSession,
   onLeaveMeeting,
-  onCreateGroup,        // backward compat
-  onOpenSchedule,       // backward compat
-  onOpenQuiz,           // backward compat
+  onCreateGroup,
+  onOpenSchedule,
+  onOpenQuiz,
   onOpenAnalytics,
   onToggleSidebar,
   isAdmin,
@@ -29,16 +36,29 @@ const Header = ({
   userRole,
   onBack,
   socket,
-  // ── Existing new optional props ──
-  participantCount,     // student bar "• N PARTICIPANTS"
-  sessionStartedAt,     // teacher bar "Session started X ago"
-  onViewPin,            // open PIN/QR modal
+  // ── Existing optional props ──
+  participantCount,
+  sessionStartedAt,
+  onViewPin,           // if provided → App.js handles PIN modal; else built-in modal
+  currentUser,         // if provided → use it; else read from localStorage
   // ── NEW optional prop ──
-  currentUser,          // { name, username, role, profilePhoto } — shows top-right profile
+  group,               // full group object → group.pin, group.qrCode for built-in modal
+                       // pass as: <Header group={currentGroup} ... />
 }) => {
 
-  const [timeAgo, setTimeAgo] = useState('');
+  // ── Resolve user: prop → localStorage → null ────────────────────────────
+  // WHY: App.js may not pass currentUser yet. Header must be self-sufficient.
+  // Same approach Sidebar.js uses for getCurrentUser().
+  const resolvedUser = currentUser || (() => {
+    try { return JSON.parse(localStorage.getItem('user') || 'null'); }
+    catch { return null; }
+  })();
 
+  // ── Internal PIN/QR modal state ─────────────────────────────────────────
+  const [showPinModal, setShowPinModal] = useState(false);
+
+  // ── "Session started X ago" timer ───────────────────────────────────────
+  const [timeAgo, setTimeAgo] = useState('');
   useEffect(() => {
     if (!sessionStartedAt) return;
     const calc = () => {
@@ -55,213 +75,313 @@ const Header = ({
 
   const isTeacher = userRole === 'teacher';
 
-  // Avatar initials fallback
+  // ── Helpers ──────────────────────────────────────────────────────────────
   const getInitials = (name) => (name || '??').substring(0, 2).toUpperCase();
 
-  // Dispatch search toggle to ChatArea (no prop drilling needed)
+  // Search: dispatches event → ChatArea.js listens via window.addEventListener
   const toggleSearch = () =>
     window.dispatchEvent(new CustomEvent('toggleChatSearch'));
 
+  // PIN/QR button click handler
+  const handleViewPin = () => {
+    if (typeof onViewPin === 'function') {
+      onViewPin();            // let App.js handle it
+    } else {
+      setShowPinModal(true);  // show built-in modal
+    }
+  };
+
+  // Copy text to clipboard
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('Copied!');
+    } catch {
+      alert('Copy failed — please copy manually');
+    }
+  };
+
   // ════════════════════════════════════════════════════════════════════════
   return (
-    <header style={S.header}>
+    <>
+      <header style={S.header}>
 
-      {/* ═══ ROW 1 — BRAND BAR ═══════════════════════════════════════════
-          Left:  ClassVibe wordmark (+ Back button if outside session)
-          Right: User profile (name / role / avatar)  ← NEW
-                 + Bell + hamburger only when NOT in a session
-      ═══════════════════════════════════════════════════════════════════ */}
-      <div style={S.brandRow}>
+        {/* ═══ ROW 1 — BRAND BAR ═══════════════════════════════════════════
+            Left:  ClassVibe wordmark (+ Back button when outside session)
+            Right: User profile (name / role / avatar) — self-reads localStorage
+                   + Bell + hamburger only when NOT in a session
+        ═══════════════════════════════════════════════════════════════════ */}
+        <div style={S.brandRow}>
 
-        {/* Left: logo */}
-        <div style={S.brandLeft}>
-          <span style={S.logo}>ClassVibe</span>
-          {onBack && !groupName && (
-            <button onClick={onBack} style={S.backBtn}>← Back</button>
-          )}
-        </div>
-
-        {/* Right: user profile + optional bell/menu */}
-        <div style={S.brandRight}>
-
-          {/* User profile block — shown when currentUser prop is provided */}
-          {currentUser && (
-            <div style={S.userProfile}>
-              <div style={S.userTextBlock}>
-                <span style={S.userName}>
-                  {currentUser.name || currentUser.username || 'User'}
-                </span>
-                <span style={S.userRoleLabel}>
-                  {currentUser.role || userRole || ''}
-                </span>
-              </div>
-              {/* Avatar: photo if available, else initials circle with online dot */}
-              {currentUser.profilePhoto ? (
-                <div style={S.avatarWrap}>
-                  <img
-                    src={currentUser.profilePhoto}
-                    alt="profile"
-                    style={S.avatarImg}
-                  />
-                  <div style={S.onlineDot} />
-                </div>
-              ) : (
-                <div style={S.avatarWrap}>
-                  <div style={S.avatarFallback}>
-                    {getInitials(currentUser.name || currentUser.username)}
-                  </div>
-                  <div style={S.onlineDot} />
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Bell + hamburger — only when NOT inside a session */}
-          {!groupName && (
-            <>
-              {socket && <NotificationBell socket={socket} />}
-              <button
-                onClick={onToggleSidebar}
-                style={S.hamburgerBtn}
-                aria-label="Menu"
-              >
-                <span style={S.hLine} />
-                <span style={S.hLine} />
-                <span style={S.hLine} />
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ═══ ROW 2 — SESSION SUB-HEADER ══════════════════════════════════
-          Only shown when inside a session (groupName exists)
-          Teacher: LIVE | name | View PIN & QR | Live Analytics | End | 🔍 | ⋮
-          Student: 💬   | name | SESSION ACTIVE | View PIN       | 🔍 | ⋮
-      ═══════════════════════════════════════════════════════════════════ */}
-      {groupName && (
-        <div style={S.sessionBar}>
-
-          {/* ── LEFT: session identity ── */}
-          <div style={S.sessionLeft}>
-            {isTeacher ? (
-              /* Teacher identity */
-              <>
-                <span style={S.liveBadge}>LIVE</span>
-                <div style={S.sessionInfo}>
-                  <span style={S.sessionName}>{groupName}</span>
-                  {timeAgo && (
-                    <span style={S.sessionMeta}>Session started {timeAgo}</span>
-                  )}
-                </div>
-              </>
-            ) : (
-              /* Student identity */
-              <>
-                <div style={S.chatIconBox}>
-                  <span style={{ fontSize: 15 }}>💬</span>
-                </div>
-                <div style={S.sessionInfo}>
-                  <span style={S.sessionName}>{groupName}</span>
-                  <span style={S.sessionMeta}>
-                    SESSION ACTIVE
-                    {participantCount ? ` • ${participantCount} PARTICIPANTS` : ''}
-                  </span>
-                </div>
-              </>
+          <div style={S.brandLeft}>
+            <span style={S.logo}>ClassVibe</span>
+            {onBack && !groupName && (
+              <button onClick={onBack} style={S.backBtn}>← Back</button>
             )}
           </div>
 
-          {/* ── RIGHT: action buttons ── */}
-          <div style={S.sessionRight}>
+          <div style={S.brandRight}>
 
-            {/* View PIN & QR / View PIN */}
-            {onViewPin && (
+            {/* User profile — shows whenever resolvedUser is available */}
+            {resolvedUser && (
+              <div style={S.userProfile}>
+                <div style={S.userTextBlock}>
+                  <span style={S.userName}>
+                    {resolvedUser.name || resolvedUser.username || 'User'}
+                  </span>
+                  <span style={S.userRoleLabel}>
+                    {resolvedUser.role || userRole || ''}
+                  </span>
+                </div>
+                {/* Avatar: photo → initials circle */}
+                <div style={S.avatarWrap}>
+                  {resolvedUser.profilePhoto ? (
+                    <img
+                      src={resolvedUser.profilePhoto}
+                      alt="profile"
+                      style={S.avatarImg}
+                    />
+                  ) : (
+                    <div style={S.avatarFallback}>
+                      {getInitials(resolvedUser.name || resolvedUser.username)}
+                    </div>
+                  )}
+                  <div style={S.onlineDot} />
+                </div>
+              </div>
+            )}
+
+            {/* Bell + hamburger — only when NOT inside a session */}
+            {!groupName && (
+              <>
+                {socket && <NotificationBell socket={socket} />}
+                <button
+                  onClick={onToggleSidebar}
+                  style={S.hamburgerBtn}
+                  aria-label="Menu"
+                >
+                  <span style={S.hLine} />
+                  <span style={S.hLine} />
+                  <span style={S.hLine} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ═══ ROW 2 — SESSION SUB-HEADER ══════════════════════════════════
+            Teacher: LIVE | name | View PIN & QR | Live Analytics | End | 🔍 | 🔔 | ⋮
+            Student: 💬   | name | SESSION ACTIVE | View PIN      | 🔍 | 🔔 | ⋮
+        ═══════════════════════════════════════════════════════════════════ */}
+        {groupName && (
+          <div style={S.sessionBar}>
+
+            {/* LEFT: session identity */}
+            <div style={S.sessionLeft}>
+              {isTeacher ? (
+                <>
+                  <span style={S.liveBadge}>LIVE</span>
+                  <div style={S.sessionInfo}>
+                    <span style={S.sessionName}>{groupName}</span>
+                    {timeAgo && (
+                      <span style={S.sessionMeta}>Session started {timeAgo}</span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={S.chatIconBox}>
+                    <span style={{ fontSize: 15 }}>💬</span>
+                  </div>
+                  <div style={S.sessionInfo}>
+                    <span style={S.sessionName}>{groupName}</span>
+                    <span style={S.sessionMeta}>
+                      SESSION ACTIVE
+                      {participantCount ? ` • ${participantCount} PARTICIPANTS` : ''}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* RIGHT: action buttons */}
+            <div style={S.sessionRight}>
+
+              {/* View Session PIN & QR — ALWAYS shown when in session
+                  WHY: Previously only rendered when onViewPin prop existed.
+                  Now: always shows. Clicking opens built-in modal OR calls onViewPin. */}
               <button
-                onClick={onViewPin}
+                onClick={handleViewPin}
                 style={S.pinBtn}
                 onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
                 onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
               >
                 {isTeacher ? 'View Session PIN & QR' : 'View Session PIN'}
               </button>
-            )}
 
-            {/* Live Analytics — teacher only */}
-            {isTeacher && onOpenAnalytics && (
+              {/* Live Analytics — teacher only */}
+              {isTeacher && onOpenAnalytics && (
+                <button
+                  onClick={onOpenAnalytics}
+                  style={S.analyticsBtn}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
+                >
+                  📊 Live Analytics
+                </button>
+              )}
+
+              {/* End Session — teacher/admin only */}
+              {isAdmin && onEndSession && (
+                <button
+                  onClick={onEndSession}
+                  style={S.endBtn}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#dc2626'}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ef4444'}
+                >
+                  🔴 End Session
+                </button>
+              )}
+
+              {/* Leave — student only */}
+              {!isAdmin && onLeaveMeeting && groupName && (
+                <button
+                  onClick={onLeaveMeeting}
+                  style={S.leaveBtn}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = '#ea580c'}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = '#f97316'}
+                >
+                  Leave
+                </button>
+              )}
+
+              {/* 🔍 Search — dispatches event to ChatArea */}
               <button
-                onClick={onOpenAnalytics}
-                style={S.analyticsBtn}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
+                onClick={toggleSearch}
+                style={S.searchBtn}
+                title="Search messages"
+                aria-label="Search messages"
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
               >
-                📊 Live Analytics
+                🔍
               </button>
-            )}
 
-            {/* End Session — teacher/admin only */}
-            {isAdmin && onEndSession && (
+              {/* Notification Bell */}
+              {socket && <NotificationBell socket={socket} />}
+
+              {/* ⋮ Three-dot menu */}
               <button
-                onClick={onEndSession}
-                style={S.endBtn}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#dc2626'}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ef4444'}
+                onClick={onToggleSidebar}
+                style={S.moreBtn}
+                aria-label="More options"
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
               >
-                🔴 End Session
+                ⋮
               </button>
+
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* ══ PIN / QR MODAL ════════════════════════════════════════════════════
+          Shows when "View Session PIN & QR" is clicked and no onViewPin prop.
+          Data comes from `group` prop (pass currentGroup from App.js).
+          WHY built-in: App.js hasn't wired onViewPin yet — this makes the
+          button functional immediately without touching App.js.
+      ══════════════════════════════════════════════════════════════════════ */}
+      {showPinModal && (
+        <div style={M.overlay} onClick={() => setShowPinModal(false)}>
+          <div style={M.card} onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div style={M.header}>
+              <div>
+                <h2 style={M.title}>Session PIN & QR Code</h2>
+                <p style={M.subtitle}>{groupName}</p>
+              </div>
+              <button onClick={() => setShowPinModal(false)} style={M.closeBtn}>✕</button>
+            </div>
+
+            {/* PIN display */}
+            <div style={M.pinSection}>
+              <p style={M.pinLabel}>SESSION PIN</p>
+              <div style={M.pinBox}>
+                <span style={M.pinNumber}>
+                  {group?.pin
+                    ? String(group.pin).replace(/(\d{3})(\d{3})/, '$1-$2')
+                    : '— —'}
+                </span>
+                {group?.pin && (
+                  <button
+                    style={M.copyBtn}
+                    onClick={() => copyToClipboard(String(group.pin))}
+                  >
+                    📋 Copy PIN
+                  </button>
+                )}
+              </div>
+              <p style={M.pinHint}>
+                Share this PIN with students to join the session
+              </p>
+            </div>
+
+            {/* QR code */}
+            {group?.qrCode ? (
+              <div style={M.qrSection}>
+                <p style={M.pinLabel}>QR CODE</p>
+                <div style={M.qrWrap}>
+                  <img
+                    src={group.qrCode}
+                    alt="Session QR Code"
+                    style={M.qrImg}
+                  />
+                </div>
+                <div style={M.qrActions}>
+                  <button
+                    style={M.copyBtn}
+                    onClick={() => {
+                      const w = window.open();
+                      w.document.write(`<img src="${group.qrCode}" style="max-width:100%;padding:20px"/>`);
+                      w.document.title = 'ClassVibe QR Code';
+                    }}
+                  >
+                    🔍 Open Full Size
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={M.noQr}>
+                <span style={{ fontSize: 32, opacity: 0.3 }}>📷</span>
+                <p style={{ fontSize: 13, color: '#94a3b8', margin: '8px 0 0' }}>
+                  QR code not available for this session
+                </p>
+              </div>
             )}
 
-            {/* Leave — student only */}
-            {!isAdmin && onLeaveMeeting && groupName && (
+            {/* Footer */}
+            <div style={M.footer}>
               <button
-                onClick={onLeaveMeeting}
-                style={S.leaveBtn}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#ea580c'}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#f97316'}
+                onClick={() => setShowPinModal(false)}
+                style={M.doneBtn}
               >
-                Leave
+                Done
               </button>
-            )}
-
-            {/* 🔍 Search — dispatches event; ChatArea listens and toggles its search bar */}
-            <button
-              onClick={toggleSearch}
-              style={S.searchBtn}
-              title="Search messages"
-              aria-label="Search messages"
-              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-            >
-              🔍
-            </button>
-
-            {/* Notification Bell */}
-            {socket && <NotificationBell socket={socket} />}
-
-            {/* ⋮ Three-dot menu */}
-            <button
-              onClick={onToggleSidebar}
-              style={S.moreBtn}
-              aria-label="More options"
-              onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
-              onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-            >
-              ⋮
-            </button>
+            </div>
 
           </div>
         </div>
       )}
-    </header>
+    </>
   );
 };
 
 // ══════════════════════════════════════════════════════════════════════════
-//  STYLES
+//  HEADER STYLES
 // ══════════════════════════════════════════════════════════════════════════
 const S = {
-
-  // Outer wrapper
   header: {
     position: 'sticky',
     top: 0,
@@ -270,7 +390,7 @@ const S = {
     boxShadow: '0 1px 0 #e2e8f0, 0 2px 8px rgba(0,0,0,0.04)',
   },
 
-  // ── Brand row ─────────────────────────────────────────────────────────
+  // Brand row
   brandRow: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -279,114 +399,26 @@ const S = {
     borderBottom: '1px solid #f1f5f9',
     minHeight: 52,
   },
-  brandLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-  },
-  logo: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#0f172a',
-    letterSpacing: '-0.5px',
-    userSelect: 'none',
-  },
-  backBtn: {
-    padding: '5px 12px',
-    fontSize: 13,
-    fontWeight: '600',
-    backgroundColor: '#f1f5f9',
-    color: '#475569',
-    border: '1px solid #e2e8f0',
-    borderRadius: 6,
-    cursor: 'pointer',
-  },
-  brandRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-  },
+  brandLeft:  { display: 'flex', alignItems: 'center', gap: 12 },
+  logo:       { fontSize: 20, fontWeight: '800', color: '#0f172a', letterSpacing: '-0.5px', userSelect: 'none' },
+  backBtn:    { padding: '5px 12px', fontSize: 13, fontWeight: '600', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer' },
+  brandRight: { display: 'flex', alignItems: 'center', gap: 12 },
 
-  // ── User profile block (brand row right) ─────────────────────────────
-  userProfile: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-  },
-  userTextBlock: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    gap: 1,
-  },
-  userName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0f172a',
-    lineHeight: 1.2,
-  },
-  userRoleLabel: {
-    fontSize: 11,
-    color: '#64748b',
-    textTransform: 'capitalize',
-  },
-  avatarWrap: {
-    position: 'relative',
-    flexShrink: 0,
-  },
-  avatarImg: {
-    width: 36,
-    height: 36,
-    borderRadius: '50%',
-    objectFit: 'cover',
-    border: '2px solid #e2e8f0',
-    display: 'block',
-  },
-  avatarFallback: {
-    width: 36,
-    height: 36,
-    borderRadius: '50%',
-    backgroundColor: '#6366f1',
-    color: 'white',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  onlineDot: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 10,
-    height: 10,
-    backgroundColor: '#22c55e',
-    borderRadius: '50%',
-    border: '2px solid white',
-  },
+  // User profile (brand row right)
+  userProfile:    { display: 'flex', alignItems: 'center', gap: 10 },
+  userTextBlock:  { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 },
+  userName:       { fontSize: 13, fontWeight: '700', color: '#0f172a', lineHeight: 1.2 },
+  userRoleLabel:  { fontSize: 11, color: '#64748b', textTransform: 'capitalize' },
+  avatarWrap:     { position: 'relative', flexShrink: 0 },
+  avatarImg:      { width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '2px solid #e2e8f0', display: 'block' },
+  avatarFallback: { width: 36, height: 36, borderRadius: '50%', backgroundColor: '#6366f1', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: '700' },
+  onlineDot:      { position: 'absolute', bottom: 0, right: 0, width: 10, height: 10, backgroundColor: '#22c55e', borderRadius: '50%', border: '2px solid white' },
 
-  // Hamburger (not-in-session only)
-  hamburgerBtn: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-around',
-    width: 32,
-    height: 28,
-    backgroundColor: 'transparent',
-    border: 'none',
-    cursor: 'pointer',
-    padding: 2,
-    gap: 4,
-  },
-  hLine: {
-    display: 'block',
-    width: '100%',
-    height: 2,
-    backgroundColor: '#64748b',
-    borderRadius: 1,
-  },
+  // Hamburger
+  hamburgerBtn: { display: 'flex', flexDirection: 'column', justifyContent: 'space-around', width: 32, height: 28, backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: 2, gap: 4 },
+  hLine:        { display: 'block', width: '100%', height: 2, backgroundColor: '#64748b', borderRadius: 1 },
 
-  // ── Session sub-header ────────────────────────────────────────────────
+  // Session sub-header
   sessionBar: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -398,150 +430,122 @@ const S = {
     gap: '8px 12px',
     minHeight: 52,
   },
-  sessionLeft: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-    minWidth: 0,
-  },
-  liveBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    padding: '3px 8px',
-    backgroundColor: '#22c55e',
-    color: '#ffffff',
-    borderRadius: 5,
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: '0.8px',
-    flexShrink: 0,
-    lineHeight: 1.6,
-  },
-  chatIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#f1f5f9',
-    border: '1px solid #e2e8f0',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  sessionInfo: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 1,
-    minWidth: 0,
-    overflow: 'hidden',
-  },
-  sessionName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0f172a',
-    whiteSpace: 'nowrap',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-  },
-  sessionMeta: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: '#64748b',
-    letterSpacing: '0.3px',
-    textTransform: 'uppercase',
-  },
+  sessionLeft: { display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 },
+  liveBadge:   { display: 'inline-flex', alignItems: 'center', padding: '3px 8px', backgroundColor: '#22c55e', color: '#ffffff', borderRadius: 5, fontSize: 10, fontWeight: '800', letterSpacing: '0.8px', flexShrink: 0, lineHeight: 1.6 },
+  chatIconBox: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#f1f5f9', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  sessionInfo: { display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, overflow: 'hidden' },
+  sessionName: { fontSize: 14, fontWeight: '700', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  sessionMeta: { fontSize: 10, fontWeight: '600', color: '#64748b', letterSpacing: '0.3px', textTransform: 'uppercase' },
 
-  // Right action buttons
-  sessionRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    flexShrink: 0,
-    flexWrap: 'wrap',
-  },
+  // Session right buttons
+  sessionRight: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' },
   pinBtn: {
-    padding: '7px 13px',
-    fontSize: 12,
-    fontWeight: '500',
-    backgroundColor: '#ffffff',
-    color: '#374151',
-    border: '1px solid #e2e8f0',
-    borderRadius: 7,
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    transition: 'background 0.15s',
+    padding: '7px 13px', fontSize: 12, fontWeight: '500',
+    backgroundColor: '#ffffff', color: '#374151',
+    border: '1px solid #e2e8f0', borderRadius: 7,
+    cursor: 'pointer', whiteSpace: 'nowrap', transition: 'background 0.15s',
   },
   analyticsBtn: {
-    padding: '7px 13px',
-    fontSize: 12,
-    fontWeight: '500',
-    backgroundColor: '#ffffff',
-    color: '#374151',
-    border: '1px solid #e2e8f0',
-    borderRadius: 7,
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    transition: 'background 0.15s',
+    padding: '7px 13px', fontSize: 12, fontWeight: '500',
+    backgroundColor: '#ffffff', color: '#374151',
+    border: '1px solid #e2e8f0', borderRadius: 7,
+    cursor: 'pointer', whiteSpace: 'nowrap', transition: 'background 0.15s',
   },
   endBtn: {
-    padding: '7px 13px',
-    fontSize: 12,
-    fontWeight: '700',
-    backgroundColor: '#ef4444',
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: 7,
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    transition: 'background 0.15s',
+    padding: '7px 13px', fontSize: 12, fontWeight: '700',
+    backgroundColor: '#ef4444', color: '#ffffff',
+    border: 'none', borderRadius: 7, cursor: 'pointer',
+    whiteSpace: 'nowrap', transition: 'background 0.15s',
   },
   leaveBtn: {
-    padding: '7px 13px',
-    fontSize: 12,
-    fontWeight: '600',
-    backgroundColor: '#f97316',
-    color: '#ffffff',
-    border: 'none',
-    borderRadius: 7,
-    cursor: 'pointer',
+    padding: '7px 13px', fontSize: 12, fontWeight: '600',
+    backgroundColor: '#f97316', color: '#ffffff',
+    border: 'none', borderRadius: 7, cursor: 'pointer',
     transition: 'background 0.15s',
   },
-
-  // 🔍 Search button — NEW
   searchBtn: {
-    width: 34,
-    height: 34,
-    fontSize: 16,
-    color: '#475569',
-    backgroundColor: 'transparent',
-    border: '1px solid #e2e8f0',
-    borderRadius: 8,
-    cursor: 'pointer',
+    width: 34, height: 34, fontSize: 16, color: '#475569',
+    backgroundColor: 'transparent', border: '1px solid #e2e8f0',
+    borderRadius: 8, cursor: 'pointer', display: 'flex',
+    alignItems: 'center', justifyContent: 'center',
+    transition: 'background 0.15s', flexShrink: 0,
+  },
+  moreBtn: {
+    width: 34, height: 34, fontSize: 22, fontWeight: '700',
+    color: '#475569', backgroundColor: 'transparent',
+    border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    lineHeight: 1, transition: 'background 0.15s', flexShrink: 0,
+  },
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+//  PIN / QR MODAL STYLES
+// ══════════════════════════════════════════════════════════════════════════
+const M = {
+  overlay: {
+    position: 'fixed', inset: 0,
+    backgroundColor: 'rgba(15,23,42,0.65)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    zIndex: 2000,
+    padding: 20,
+  },
+  card: {
+    backgroundColor: 'white',
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 420,
+    boxShadow: '0 24px 64px rgba(0,0,0,0.22)',
+    overflow: 'hidden',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'background 0.15s',
-    flexShrink: 0,
+    flexDirection: 'column',
   },
 
-  // ⋮ Three-dot menu
-  moreBtn: {
-    width: 34,
-    height: 34,
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#475569',
-    backgroundColor: 'transparent',
-    border: '1px solid #e2e8f0',
-    borderRadius: 8,
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    lineHeight: 1,
-    transition: 'background 0.15s',
-    flexShrink: 0,
+  // Modal header
+  header: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+    padding: '20px 24px 16px',
+    borderBottom: '1px solid #f1f5f9',
+  },
+  title:    { margin: 0, fontSize: 18, fontWeight: '800', color: '#0f172a' },
+  subtitle: { margin: '3px 0 0', fontSize: 12, color: '#64748b' },
+  closeBtn: { background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#94a3b8', lineHeight: 1, padding: 4 },
+
+  // PIN section
+  pinSection: { padding: '20px 24px 16px' },
+  pinLabel:   { margin: '0 0 10px', fontSize: 10, fontWeight: '700', color: '#94a3b8', letterSpacing: '1px', textTransform: 'uppercase' },
+  pinBox: {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: '#f8fafc', border: '1.5px solid #e2e8f0',
+    borderRadius: 12, padding: '14px 18px',
+  },
+  pinNumber: { fontSize: 36, fontWeight: '800', color: '#0f172a', letterSpacing: 4, fontVariantNumeric: 'tabular-nums' },
+  pinHint:   { margin: '10px 0 0', fontSize: 12, color: '#64748b' },
+
+  // QR section
+  qrSection: { padding: '4px 24px 16px' },
+  qrWrap: {
+    display: 'flex', justifyContent: 'center',
+    backgroundColor: '#f8fafc', border: '1.5px solid #e2e8f0',
+    borderRadius: 12, padding: 16,
+  },
+  qrImg:    { width: 180, height: 180, objectFit: 'contain' },
+  qrActions:{ display: 'flex', gap: 8, marginTop: 10 },
+  noQr:     { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '12px 24px 20px' },
+
+  // Copy button
+  copyBtn: {
+    padding: '7px 14px', fontSize: 12, fontWeight: '600',
+    backgroundColor: '#eef2ff', color: '#4f46e5',
+    border: '1px solid #c7d2fe', borderRadius: 8, cursor: 'pointer',
+  },
+
+  // Footer
+  footer: { padding: '14px 24px 20px', borderTop: '1px solid #f1f5f9' },
+  doneBtn: {
+    width: '100%', padding: 12, fontSize: 14, fontWeight: '700',
+    backgroundColor: '#6366f1', color: 'white',
+    border: 'none', borderRadius: 10, cursor: 'pointer',
   },
 };
 
