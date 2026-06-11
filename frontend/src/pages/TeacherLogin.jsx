@@ -6,12 +6,17 @@
 //         password → autoComplete="new-password" (register) / "current-password" (sign in)
 // All other logic — validation, socket auth, register/login flow — IDENTICAL
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./TeacherLogin.css";
 import { register, login } from "../api";
 import socket from "../socket";
+import { FaChalkboardTeacher } from "react-icons/fa";
+import Footer from "../pages/Footer";
 
 export default function TeacherLogin({ onAuthSuccess, onBack }) {
+  const [darkMode] = useState(
+    localStorage.getItem("theme") === "dark"
+  );
   const [username, setUsername] = useState("");
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("");
@@ -128,9 +133,12 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
     setIsRegisterMode((s) => !s);
     setMessage(""); setMessageType("error"); setUsername("");
   };
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
 
   return (
-    <div className="teacher-page">
+    <div className={`teacher-page ${darkMode ? "dark-mode" : ""}`}>
       <header className="teacher-header">
         <h2>ClassVibe <span className="owner">- sai</span></h2>
         <div className="header-actions">
@@ -140,7 +148,7 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
 
       <main className="teacher-main">
         <div className="teacher-container">
-          <div className="icon">🎓</div>
+        <FaChalkboardTeacher className="icon" />
 
           <h2 className="teacher-title">
             {isRegisterMode ? "Create Teacher Account" : "Teacher Sign In"}
@@ -223,15 +231,7 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
           </div>
         </div>
       </main>
-
-      <footer className="teacher-footer">
-        <div className="social-links">
-          <img src="/css/instagram.png" alt="ig" />
-          <img src="/css/linkedin.png" alt="in" />
-          <img src="/css/telegram.png" alt="tg" />
-        </div>
-        <div className="copyright">© 2024 ClassVibe. Connecting classrooms worldwide.</div>
-      </footer>
+      <Footer />
     </div>
   );
 }
