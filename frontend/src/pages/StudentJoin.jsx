@@ -8,8 +8,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import "./StudentJoin.css";
 import { joinGroup } from "../api";
+import Footer from "../pages/Footer";
+import {FaUserGraduate, FaHashtag, FaQrcode} from "react-icons/fa"
 
 export default function StudentJoin({ onJoinSuccess, onBack }) {
+  const [darkMode] = useState(
+    localStorage.getItem("theme") === "dark"
+  );
   const [showPinForm, setShowPinForm] = useState(false);
   const [showQRHelp,  setShowQRHelp]  = useState(false);
   const [scanning,    setScanning]    = useState(false);
@@ -30,6 +35,7 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
 
   // ✅ Check URL for PIN (from QR code)
   useEffect(() => {
+     window.scrollTo(0, 0);
     const urlParams  = new URLSearchParams(window.location.search);
     const pinFromUrl = urlParams.get('pin');
     // ✅ CHANGED: accept 4–6 digit PIN from URL
@@ -152,17 +158,15 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
 
   // ─────────────────────────────────────────
   return (
-    <div className="student-page">
+    <div className={`student-page ${darkMode ? "dark-mode" : ""}`}>
       <header className="student-header">
-        <h2 className="header-bar">
-          ClassVibe
-          <button className="back-link" onClick={() => onBack && onBack()}>Back to Home</button>
-        </h2>
+        <h2>ClassVibe</h2>
+        <button className="back-link" onClick={() => onBack && onBack()}>Back to Home</button>
       </header>
 
       <main className="student-main">
         <div className="container1">
-          <img src="/css/all.min.css/student (1).png" alt="student" className="big-icon" />
+          <FaUserGraduate className="big-icon" />
 
           <h2 className="para">
             <b>Join a classroom</b>
@@ -173,7 +177,7 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
             <div className="row1">
               <div className="col-2">
                 <div className="role-card" onClick={() => { resetMessages(); setShowPinForm(true); setShowQRHelp(false); }}>
-                  <img src="/css/all.min.css/hashtag-lock.png" alt="PIN" className="big-icon" />
+                  <FaHashtag  className="card-icon" />
                   <h2>Enter PIN</h2>
                   <p>Ask your teacher for the session PIN</p>
                   <button className="card-btn" onClick={e => { e.stopPropagation(); resetMessages(); setShowPinForm(true); setShowQRHelp(false); }}>Enter PIN</button>
@@ -181,7 +185,7 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
               </div>
               <div className="col-2">
                 <div className="role-card" onClick={() => { resetMessages(); startCameraScan(); }}>
-                  <img src="/css/all.min.css/qr (1).png" alt="qr code" className="big-icon" />
+                  <FaQrcode className="card-icon" />
                   <h2>Scan QR Code</h2>
                   <p>Point your camera at the teacher's screen</p>
                   <button className="card-btn" onClick={e => { e.stopPropagation(); resetMessages(); startCameraScan(); }}>Scan QR Code</button>
@@ -213,7 +217,6 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
                   onChange={e => setName(e.target.value)}
                   placeholder="Enter your name or nickname"
                   autoComplete="name"
-                  autoFocus
                   required
                 />
 
@@ -280,15 +283,7 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
           {message && <div className={`msg ${messageType === "success" ? "success" : "error"}`}>{message}</div>}
         </div>
       </main>
-
-      <footer className="student-footer">
-        <div className="social-links">
-          <img src="/css/all.min.css/instagram.png" alt="instagram" />
-          <img src="/css/all.min.css/linkedin.png" alt="linkedin" />
-          <img src="/css/all.min.css/telegram.png" alt="telegram" />
-        </div>
-        <div className="copyright">© 2024 ClassVibe. Connecting classrooms worldwide.</div>
-      </footer>
+      <Footer />
     </div>
   );
 }
