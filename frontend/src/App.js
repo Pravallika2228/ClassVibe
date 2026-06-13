@@ -24,6 +24,7 @@ import './App.css';
 import QuizHost from './components/QuizHost';
 import QuizWaitingRoom from './components/QuizWaitingRoom';
 import QuizPlayer from './components/QuizPlayer';
+// eslint-disable-next-line no-unused-vars
 import Footer from './components/Footer';
 
 function App() {
