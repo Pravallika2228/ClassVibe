@@ -362,6 +362,32 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // ------------------
+// UPDATE PROFILE
+// ------------------
+app.put('/api/auth/update-profile', authenticateToken, async (req, res) => {
+  try {
+    const { name, username, profilePhoto } = req.body;
+    const user = await User.findById(req.user.userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (username && username.trim() !== user.username) {
+      const exists = await User.findOne({ username: username.trim(), _id: { $ne: user._id } });
+      if (exists) return res.status(400).json({ error: 'Username already taken' });
+      user.username = username.trim();
+    }
+    if (name) user.name = name.trim();
+    if (profilePhoto !== undefined) user.profilePhoto = profilePhoto;
+    await user.save();
+    res.json({
+      message: 'Profile updated',
+      user: { id: user._id.toString(), username: user.username, email: user.email, name: user.name, role: user.role }
+    });
+  } catch (err) {
+    console.error('Update profile error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ------------------
 // FILE UPLOAD ROUTE
 // ------------------
 

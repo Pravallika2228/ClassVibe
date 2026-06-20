@@ -511,8 +511,8 @@ const Sidebar = ({
               </div>
               <div style={styles.participantsList}>
                 {(group.members || []).slice(0, 8).map((member, i) => {
-                  const name     = member.username ?? member.name ?? `Member ${i + 1}`;
-                  const mId      = member._id ?? member.id;
+                  const name     = member.user?.username ?? member.user?.name ?? member.username ?? member.name ?? `Member ${i + 1}`;
+                  const mId      = member.user?._id ?? member.user?.id ?? member._id ?? member.id;
                   const isOnline = group.onlineUsers?.some(u => (u._id || u.id || u) === mId);
                   const colors   = ['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#BB8FCE','#98D8C8','#F7DC6F','#85C1E2'];
                   return (
@@ -550,11 +550,10 @@ const Sidebar = ({
               </div>
             )}
 
-            {/* ── SUPPORT + LEAVE (student only) ── */}
+            {/* ── SUPPORT (student only) ── */}
             {resolvedRole === 'student' && (
               <div style={styles.studentActionsPanel}>
                 <button style={styles.supportBtn} onClick={() => window.open('mailto:support@classvibe.app', '_blank')}>❓ Support</button>
-                <button style={styles.leaveSessionBtn} onClick={() => { onClose(); onLeaveMeeting?.(); }}>→ Leave session</button>
               </div>
             )}
 
@@ -600,78 +599,89 @@ const Sidebar = ({
           )}
         </div>
 
-        {/* Active Students */}
-        <div style={styles.section}>
-          <div style={styles.sectionHeader} onClick={() => toggleSection('activeUsers')}>
-            <span style={styles.sectionTitle}>👤 Active Students</span>
-            <span style={styles.arrow}>{expandedSection === 'activeUsers' ? '▼' : '▶'}</span>
-          </div>
-          {expandedSection === 'activeUsers' && (
-            <div style={styles.sectionContent}>
-              {group?.onlineUsers?.length > 0 ? (
-                <>
-                  <p style={styles.description}>Students who have sent at least one message</p>
-                  {(() => {
-                    const teacherId = group.admin?._id || group.admin?.id || group.admin;
-                    const active = group.onlineUsers.filter(u => {
-                      const uid = u._id || u.id;
-                      return String(uid) !== String(teacherId) && (messageCounts[uid] || 0) > 0;
-                    });
-                    if (!active.length) return <p style={styles.noUsers}>No active students yet.</p>;
-                    return (
-                      <div style={styles.activeUsersList}>
-                        {active.map(u => {
-                          const uid  = u._id || u.id;
-                          const name = u.username || u.name || 'Unknown';
-                          const cnt  = messageCounts[uid] || 0;
-                          return (
-                            <div key={uid} style={styles.activeUserItem}>
-                              <div style={styles.activeUserLeft}>
-                                <div style={styles.activeStatusDot} />
-                                <span style={styles.activeUserName}>{name}</span>
+        {/* Active Students — teacher only */}
+        {resolvedRole === 'teacher' && (
+          <div style={styles.section}>
+            <div style={styles.sectionHeader} onClick={() => toggleSection('activeUsers')}>
+              <span style={styles.sectionTitle}>👤 Active Students</span>
+              <span style={styles.arrow}>{expandedSection === 'activeUsers' ? '▼' : '▶'}</span>
+            </div>
+            {expandedSection === 'activeUsers' && (
+              <div style={styles.sectionContent}>
+                {group?.onlineUsers?.length > 0 ? (
+                  <>
+                    <p style={styles.description}>Students who have sent at least one message</p>
+                    {(() => {
+                      const teacherId = group.admin?._id || group.admin?.id || group.admin;
+                      const active = group.onlineUsers.filter(u => {
+                        const uid = u._id || u.id;
+                        return String(uid) !== String(teacherId) && (messageCounts[uid] || 0) > 0;
+                      });
+                      if (!active.length) return <p style={styles.noUsers}>No active students yet.</p>;
+                      return (
+                        <div style={styles.activeUsersList}>
+                          {active.map(u => {
+                            const uid  = u._id || u.id;
+                            const name = u.username || u.name || 'Unknown';
+                            const cnt  = messageCounts[uid] || 0;
+                            return (
+                              <div key={uid} style={styles.activeUserItem}>
+                                <div style={styles.activeUserLeft}>
+                                  <div style={styles.activeStatusDot} />
+                                  <span style={styles.activeUserName}>{name}</span>
+                                </div>
+                                <span style={styles.messageCount}>{cnt} {cnt === 1 ? 'msg' : 'msgs'}</span>
                               </div>
-                              <span style={styles.messageCount}>{cnt} {cnt === 1 ? 'msg' : 'msgs'}</span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
-                </>
-              ) : <p style={styles.noUsers}>No users online</p>}
-            </div>
-          )}
-        </div>
-
-        {/* ── "Participation" section REMOVED — data already in participantsPanel above ── */}
-
-        {/* Statistics */}
-        <div style={styles.section}>
-          <div style={styles.sectionHeader} onClick={() => toggleSection('stats')}>
-            <span style={styles.sectionTitle}>📊 Statistics</span>
-            <span style={styles.arrow}>{expandedSection === 'stats' ? '▼' : '▶'}</span>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </>
+                ) : <p style={styles.noUsers}>No users online</p>}
+              </div>
+            )}
           </div>
-          {expandedSection === 'stats' && (
-            <div style={styles.sectionContent}>
-              {[
-                { label: 'Total Messages:', value: messages?.length || 0 },
-                { label: 'Online Members:', value: group?.onlineUsers?.length || 0 },
-                { label: 'Total Members:',  value: group?.members?.length || 0 },
-              ].map((s, i) => (
-                <div key={i} style={styles.statItem}>
-                  <span style={styles.statLabel}>{s.label}</span>
-                  <span style={styles.statValue}>{s.value}</span>
-                </div>
-              ))}
-              {group?.createdAt && (
-                <div style={styles.statItem}>
-                  <span style={styles.statLabel}>Session Started:</span>
-                  <span style={styles.statValue}>{new Date(group.createdAt).toLocaleDateString()}</span>
-                </div>
-              )}
+        )}
+
+        {/* Statistics — teacher only */}
+        {resolvedRole === 'teacher' && (
+          <div style={styles.section}>
+            <div style={styles.sectionHeader} onClick={() => toggleSection('stats')}>
+              <span style={styles.sectionTitle}>📊 Statistics</span>
+              <span style={styles.arrow}>{expandedSection === 'stats' ? '▼' : '▶'}</span>
             </div>
-          )}
-        </div>
+            {expandedSection === 'stats' && (
+              <div style={styles.sectionContent}>
+                {[
+                  { label: 'Total Messages:', value: messages?.length || 0 },
+                  { label: 'Online Members:', value: group?.onlineUsers?.length || 0 },
+                  { label: 'Total Members:',  value: group?.members?.length || 0 },
+                ].map((s, i) => (
+                  <div key={i} style={styles.statItem}>
+                    <span style={styles.statLabel}>{s.label}</span>
+                    <span style={styles.statValue}>{s.value}</span>
+                  </div>
+                ))}
+                {group?.createdAt && (
+                  <div style={styles.statItem}>
+                    <span style={styles.statLabel}>Session Started:</span>
+                    <span style={styles.statValue}>{new Date(group.createdAt).toLocaleDateString()}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Leave session — student only, bottom */}
+        {group && resolvedRole === 'student' && (
+          <div style={{ padding:'12px 20px', marginTop:'auto', borderTop:'1px solid #f3f4f6' }}>
+            <button style={styles.leaveSessionBtn} onClick={() => { onClose(); onLeaveMeeting?.(); }}>
+              → Leave session
+            </button>
+          </div>
+        )}
 
       </div>
     </>

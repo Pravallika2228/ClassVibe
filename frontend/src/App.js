@@ -47,6 +47,11 @@ function App() {
   const [showQuizPlayer, setShowQuizPlayer] = useState(false);
 
   const [scheduledSessions, setScheduledSessions] = useState([]);
+  const [studentView, setStudentView] = useState('dashboard');
+  const [pinInput, setPinInput] = useState('');
+  const [profileName, setProfileName] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMsg, setProfileMsg] = useState('');
 
   // ✅ NEW: Three-dots menu state
   const [openMenuId, setOpenMenuId]           = useState(null); // which card's menu is open
@@ -125,7 +130,7 @@ function App() {
         setIsAuthenticated(true);
         socket.connect();
         socket.emit('authenticate', savedToken);
-        loadGroups(true);
+        loadGroups(parsedUser?.role === 'teacher');
       } catch (err) {
         console.error('Error restoring session:', err);
         localStorage.removeItem('token'); localStorage.removeItem('user');
@@ -138,6 +143,10 @@ function App() {
   useEffect(() => {
     if (isAuthenticated && user?.role === 'teacher') loadScheduledSessions();
   }, [isAuthenticated, user, loadScheduledSessions]);
+
+  useEffect(() => {
+    if (user) setProfileName(user.name || user.username || '');
+  }, [user]);
 
   // IDENTICAL to previous — all socket events preserved
   useEffect(() => {
@@ -244,13 +253,56 @@ function App() {
     const t = token ?? localStorage.getItem('token');
     if (t) {
       socket.connect(); socket.emit('authenticate', t);
-      socket.once('authenticated', () => {
-        loadGroups(false);
-        const gid = group?._id ?? group?.id;
-        if (gid) setTimeout(() => selectGroup(gid), 500);
-      });
-      setTimeout(() => { loadGroups(false); const gid = group?._id ?? group?.id; if (gid) selectGroup(gid); }, 1000);
+      socket.once('authenticated', () => loadGroups(false));
+      setTimeout(() => loadGroups(false), 1000);
     }
+  };
+
+  const handleStudentPinJoin = async () => {
+    const pin = pinInput.trim();
+    if (!/^\d{4,6}$/.test(pin)) { alert('Please enter a valid 4-6 digit PIN'); return; }
+    try {
+      const token = localStorage.getItem('token');
+      const API = process.env.REACT_APP_API_URL || 'https://classvibe-backend.onrender.com';
+      const res = await fetch(`${API}/api/groups/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ pin, name: user?.name || user?.username })
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || 'Failed to join session'); return; }
+      setPinInput('');
+      const groupId = data.group?._id ?? data.group?.id;
+      if (groupId) { await loadGroups(false); selectGroup(groupId); }
+    } catch (err) { alert('Failed to join: ' + err.message); }
+  };
+
+  const handleProfileSave = async () => {
+    if (!profileName.trim()) { setProfileMsg('Name cannot be empty'); return; }
+    setProfileSaving(true); setProfileMsg('');
+    try {
+      const token = localStorage.getItem('token');
+      const API = process.env.REACT_APP_API_URL || 'https://classvibe-backend.onrender.com';
+      const res = await fetch(`${API}/api/auth/update-profile`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name: profileName.trim(), username: profileName.trim() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const updated = { ...user, name: profileName.trim(), username: profileName.trim() };
+        localStorage.setItem('user', JSON.stringify(updated));
+        setUser(updated);
+        setProfileMsg('Profile updated successfully!');
+      } else {
+        setProfileMsg(data.error || 'Update failed');
+      }
+    } catch {
+      const updated = { ...user, name: profileName.trim(), username: profileName.trim() };
+      localStorage.setItem('user', JSON.stringify(updated));
+      setUser(updated);
+      setProfileMsg('Saved locally');
+    } finally { setProfileSaving(false); }
   };
 
   const isAdmin = !!(currentGroup && user && currentGroup.admin &&
@@ -403,7 +455,7 @@ function App() {
         socket={socket}
       />
 
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} group={currentGroup} messages={messages} currentUserId={getUserId(user)} onGroupJoined={g => handleGroupJoined(g)} />
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} group={currentGroup} messages={messages} currentUserId={getUserId(user)} userRole={user?.role} onLeaveMeeting={handleLeaveMeeting} onGroupJoined={g => handleGroupJoined(g)} />
 
       {showQuizCreator && (
         <QuizCreator groupId={currentGroup?._id} onClose={() => setShowQuizCreator(false)}
@@ -795,56 +847,227 @@ function App() {
             </div>
 
           ) : (
-            /* ── STUDENT DASHBOARD — IDENTICAL to previous ── */
-            <div className="group-selector">
-              <div className="dashboard-welcome">
-                <h2>Welcome, {displayName}! 👋</h2>
-                <p className="dashboard-subtitle">Your joined classrooms</p>
+            /* ── STUDENT HUB ── */
+            <div style={SD.shell}>
+
+              {/* LEFT SIDEBAR */}
+              <div style={SD.sidebar}>
+                <div style={SD.sidebarLogo}>ClassVibe</div>
+                {[
+                  { icon:'📊', label:'Dashboard',     view:'dashboard' },
+                  { icon:'⚡', label:'Live Sessions',  view:'live' },
+                  { icon:'👥', label:'Participants',   view:'participants' },
+                  { icon:'👤', label:'Profile',        view:'profile' },
+                ].map((item, i) => (
+                  <button key={i} style={{ ...SD.navItem, backgroundColor: studentView === item.view ? '#EEF2FF' : 'transparent', color: studentView === item.view ? '#4F46E5' : '#6b7280', fontWeight: studentView === item.view ? '700' : '500' }} onClick={() => setStudentView(item.view)}>
+                    <span style={SD.navIcon}>{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+                <div style={SD.sidebarSpacer} />
+                <div style={SD.sidebarUser}>
+                  <div style={SD.userAvatar}>{displayName.charAt(0).toUpperCase()}</div>
+                  <div><div style={SD.userName}>{displayName}</div><div style={SD.userRole}>Student</div></div>
+                </div>
+                <button onClick={handleLogout} style={SD.logoutBtn}>Logout</button>
               </div>
-              <div style={{ textAlign:'center', margin:'20px 0' }}>
-                <button onClick={() => alert('Upcoming sessions feature - coming soon!')}
-                  style={{ padding:'12px 24px', fontSize:'16px', fontWeight:'600', backgroundColor:'#128C7E', color:'white', border:'none', borderRadius:'8px', cursor:'pointer' }}>
-                  📅 View Scheduled Sessions
-                </button>
-              </div>
-              {groups.length > 0 ? (
-                <div className="dashboard-content">
-                  <div className="section-header"><h3>My Classrooms</h3><span className="count-badge">{groups.length}</span></div>
-                  <div className="classroom-grid">
-                    {groups.map((group) => {
-                      const { date, time } = formatDateTime(group.createdAt);
-                      const teacherName = group.admin?.name || group.admin?.username || 'Unknown Teacher';
-                      return (
-                        <div key={group._id ?? group.id} className={`classroom-card ${!group.isActive ? 'inactive' : ''}`}>
-                          <div className="card-header">
-                            <h4 className="classroom-name">{group.groupName}</h4>
-                            <span className={group.isActive ? "badge-active" : "badge-ended"}>{group.isActive ? 'Active' : 'Ended'}</span>
-                          </div>
-                          <div className="card-body">
-                            <div className="info-row teacher-info"><span className="info-icon">👨‍🏫</span><span className="info-label">Teacher:</span><span className="info-value teacher-name">{teacherName}</span></div>
-                            <div className="info-row"><span className="info-icon">👥</span><span className="info-label">Students:</span><span className="info-value">{(group.members||[]).length}</span></div>
-                            {group.userJoinedAt ? (
-                              <><div className="info-row"><span className="info-icon">📅</span><span className="info-label">Joined:</span><span className="info-value">{formatDateTime(group.userJoinedAt).date}</span></div>
-                              <div className="info-row"><span className="info-icon">🕐</span><span className="info-label">Time:</span><span className="info-value">{formatDateTime(group.userJoinedAt).time}</span></div></>
-                            ) : (
-                              <><div className="info-row"><span className="info-icon">📅</span><span className="info-label">Started:</span><span className="info-value">{date}</span></div>
-                              <div className="info-row"><span className="info-icon">🕐</span><span className="info-label">Time:</span><span className="info-value">{time}</span></div></>
-                            )}
-                          </div>
-                          {group.isActive && <button onClick={() => selectGroup(group._id ?? group.id)} className="card-action-btn">Join Classroom →</button>}
-                        </div>
-                      );
-                    })}
+
+              {/* MAIN CONTENT */}
+              <div style={SD.main}>
+
+                {/* ── DASHBOARD ── */}
+                {studentView === 'dashboard' && (<>
+                  <div style={SD.topBar}>
+                    <div>
+                      <h1 style={SD.pageTitle}>Welcome back, {displayName}!</h1>
+                      <p style={SD.pageSubtitle}>
+                        {liveGroups.length > 0 ? `You have ${liveGroups.length} live session${liveGroups.length > 1 ? 's' : ''} happening right now` : 'No live sessions right now'}
+                        {endedGroups.length > 0 ? ` and ${endedGroups.length} completed` : ''}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <div className="empty-icon">🎒</div>
-                  <p className="empty-title">No classrooms joined</p>
-                  <p className="empty-text">Ask your teacher for a PIN or scan a QR code to join!</p>
-                </div>
-              )}
-              <button onClick={handleLogout} className="logout-btn">Logout</button>
+
+                  <div style={SD.statsRow}>
+                    {[
+                      { label:'SCHEDULE',  value:0,                 icon:'📅' },
+                      { label:'LIVE NOW',  value:liveGroups.length, icon:'⚡' },
+                      { label:'COMPLETED', value:endedGroups.length,icon:'✅' },
+                    ].map((s, i) => (
+                      <div key={i} style={SD.statCard}>
+                        <div style={SD.statIcon}>{s.icon}</div>
+                        <div><div style={SD.statLabel}>{s.label}</div><div style={SD.statValue}>{s.value}</div></div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={SD.contentRow}>
+                    <div style={SD.mainCol}>
+                      {/* Join Session card */}
+                      <div style={SD.joinCard}>
+                        <div style={SD.joinCardTitle}>Join Live Session <span style={{ fontSize:18, color:'#9ca3af' }}>⠿⠿</span></div>
+                        <p style={SD.joinCardDesc}>Enter PIN or scan QR to join an active classroom session instantly.</p>
+                        <input style={SD.pinInput} placeholder="Enter Session PIN" maxLength={6} value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, ''))} onKeyDown={e => e.key === 'Enter' && handleStudentPinJoin()} />
+                        <button style={SD.joinSessionBtn} onClick={handleStudentPinJoin}>Join Session</button>
+                      </div>
+
+                      {/* My Classes */}
+                      {groups.length > 0 && (<>
+                        <div style={SD.sectionBar}>
+                          <h2 style={SD.sectionTitle}>My Classes</h2>
+                          <button style={SD.viewAllBtn} onClick={() => setStudentView('live')}>View Full Schedule &gt;</button>
+                        </div>
+                        <div style={SD.classGrid}>
+                          {liveGroups.slice(0, 2).map(group => (
+                            <div key={group._id} style={SD.classCard}>
+                              <div style={SD.classBadgeActive}>LIVE</div>
+                              <div style={SD.className}>{group.groupName}</div>
+                              <div style={SD.classTeacher}>{group.admin?.name || group.admin?.username || 'Teacher'}</div>
+                              <button style={SD.enterClassBtn} onClick={() => selectGroup(group._id ?? group.id)}>Enter Classroom →</button>
+                            </div>
+                          ))}
+                          {endedGroups.slice(0, Math.max(0, 3 - liveGroups.slice(0,2).length)).map(group => (
+                            <div key={group._id} style={{ ...SD.classCard, opacity:0.75 }}>
+                              <div style={SD.classBadgeDone}>COMPLETED</div>
+                              <div style={SD.className}>{group.groupName}</div>
+                              <div style={SD.classTeacher}>{group.admin?.name || group.admin?.username || 'Teacher'}</div>
+                              <div style={{ fontSize:12, color:'#9ca3af', marginTop:8 }}>{formatDateTime(group.createdAt).date}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </>)}
+
+                      {groups.length === 0 && (
+                        <div style={SD.emptyState}>
+                          <div style={SD.emptyIcon}>🎒</div>
+                          <p style={SD.emptyTitle}>No classrooms joined yet</p>
+                          <p style={SD.emptyText}>Enter a PIN above to join your first classroom!</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* RIGHT: Session list */}
+                    <div style={SD.rightCol}>
+                      <div style={SD.sessionListCard}>
+                        <div style={SD.sessionListHeader}>
+                          <span style={SD.sessionListTitle}>Session List</span>
+                          <span style={SD.sessionListBadge}>{groups.length} Session{groups.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        {groups.slice(0, 6).map((g, i) => (
+                          <div key={i} style={SD.sessionListItem}>
+                            <div style={SD.sessionListIcon}>📖</div>
+                            <div style={SD.sessionListInfo}>
+                              <div style={SD.sessionListName}>{g.groupName}</div>
+                              <div style={SD.sessionListSub}>{g.admin?.name || g.admin?.username || 'Teacher'}</div>
+                            </div>
+                            <div style={{ ...SD.sessionListStatus, color: g.isActive ? '#10B981' : '#9ca3af' }}>
+                              {g.isActive ? 'LIVE' : formatDateTime(g.createdAt).date}
+                            </div>
+                          </div>
+                        ))}
+                        {groups.length === 0 && <p style={{ fontSize:13, color:'#9ca3af', textAlign:'center', padding:'20px 0' }}>No sessions yet</p>}
+                      </div>
+                    </div>
+                  </div>
+                </>)}
+
+                {/* ── LIVE SESSIONS ── */}
+                {studentView === 'live' && (<>
+                  <div style={SD.topBar}><h1 style={SD.pageTitle}>Live Sessions</h1></div>
+                  {liveGroups.length === 0 ? (
+                    <div style={SD.emptyState}>
+                      <div style={SD.emptyIcon}>⚡</div>
+                      <p style={SD.emptyTitle}>No live sessions right now</p>
+                      <p style={SD.emptyText}>Your teacher hasn't started a session yet. Check back soon!</p>
+                    </div>
+                  ) : (
+                    <div style={SD.sessionGrid}>
+                      {liveGroups.map(group => (
+                        <div key={group._id} style={SD.liveSessionCard}>
+                          <div style={SD.liveCardBadge}>● Live Now</div>
+                          <div style={SD.liveCardName}>{group.groupName}</div>
+                          <div style={SD.liveCardTeacher}>by {group.admin?.name || group.admin?.username || 'Teacher'}</div>
+                          <div style={SD.liveCardStats}>
+                            <span>👥 {(group.members || []).length} members</span>
+                            <span style={{ color:'#10B981', fontWeight:'600' }}>{(group.onlineUsers || []).length} online</span>
+                          </div>
+                          <button style={SD.enterBtn} onClick={() => selectGroup(group._id ?? group.id)}>Enter Classroom →</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>)}
+
+                {/* ── PARTICIPANTS ── */}
+                {studentView === 'participants' && (<>
+                  <div style={SD.topBar}><h1 style={SD.pageTitle}>Participants</h1></div>
+                  {liveGroups.length === 0 ? (
+                    <div style={SD.emptyState}>
+                      <div style={SD.emptyIcon}>👥</div>
+                      <p style={SD.emptyTitle}>No active sessions</p>
+                      <p style={SD.emptyText}>Participants will appear here when you're in an active session.</p>
+                    </div>
+                  ) : liveGroups.map(group => {
+                    const onlineIds = new Set((group.onlineUsers || []).map(u => String(u._id || u.id || u)));
+                    const onlineMembers = (group.members || []).filter(m => {
+                      const mId = String(m.user?._id || m.user?.id || m._id || m.id || '');
+                      return onlineIds.has(mId);
+                    });
+                    const colors = ['#6366f1','#10B981','#F59E0B','#EF4444','#3B82F6','#8B5CF6','#EC4899','#14B8A6'];
+                    return (
+                      <div key={group._id} style={{ marginBottom:28 }}>
+                        <div style={SD.sectionBar}>
+                          <h2 style={SD.sectionTitle}>{group.groupName}</h2>
+                          <span style={SD.onlineBadge}>{onlineMembers.length} Online</span>
+                        </div>
+                        {onlineMembers.length === 0 ? (
+                          <p style={{ color:'#9ca3af', fontSize:14 }}>No one online right now. <button style={{ color:'#4F46E5', background:'none', border:'none', cursor:'pointer', fontSize:13 }} onClick={() => loadGroups(false)}>Refresh</button></p>
+                        ) : (
+                          <div style={SD.participantGrid}>
+                            {onlineMembers.map((m, i) => {
+                              const name = m.user?.name || m.user?.username || m.name || m.username || `Member ${i+1}`;
+                              return (
+                                <div key={i} style={SD.participantCard}>
+                                  <div style={{ ...SD.participantAvatar, backgroundColor: colors[i % colors.length] }}>{name.charAt(0).toUpperCase()}</div>
+                                  <div style={SD.participantName}>{name}</div>
+                                  <div style={SD.participantOnline}>● Online</div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>)}
+
+                {/* ── PROFILE ── */}
+                {studentView === 'profile' && (<>
+                  <div style={SD.topBar}><h1 style={SD.pageTitle}>Profile</h1></div>
+                  <div style={SD.profileCard}>
+                    <div style={SD.profileField}>
+                      <label style={SD.profileLabel}>Display Name</label>
+                      <input style={SD.profileInput} value={profileName} onChange={e => setProfileName(e.target.value)} placeholder="Your name" maxLength={50} />
+                    </div>
+                    <div style={SD.profileField}>
+                      <label style={SD.profileLabel}>Email</label>
+                      <input style={{ ...SD.profileInput, ...SD.profileInputReadonly }} value={user?.email || '—'} readOnly />
+                    </div>
+                    <div style={SD.profileField}>
+                      <label style={SD.profileLabel}>Role</label>
+                      <input style={{ ...SD.profileInput, ...SD.profileInputReadonly }} value="Student" readOnly />
+                    </div>
+                    <button style={SD.profileSaveBtn} onClick={handleProfileSave} disabled={profileSaving}>
+                      {profileSaving ? 'Saving…' : 'Save Changes'}
+                    </button>
+                    {profileMsg && (
+                      <div style={{ ...SD.profileMsg, backgroundColor: profileMsg.includes('!') || profileMsg.includes('success') || profileMsg.includes('local') ? '#f0fdf4' : '#fef2f2', color: profileMsg.includes('!') || profileMsg.includes('success') || profileMsg.includes('local') ? '#15803d' : '#dc2626' }}>
+                        {profileMsg}
+                      </div>
+                    )}
+                  </div>
+                </>)}
+
+              </div>
             </div>
           )
 
@@ -968,6 +1191,82 @@ const M = {
   quizInfo:{ flex:1 },
   quizTitle:{ fontSize:'14px', fontWeight:'600', color:'#111827' },
   quizMeta:{ fontSize:'12px', color:'#6b7280', marginTop:'2px' },
+};
+
+// ── STUDENT HUB STYLES ──
+const SD = {
+  shell:{ display:'flex', height:'100%', backgroundColor:'#f9fafb', overflow:'hidden' },
+  sidebar:{ width:220, flexShrink:0, backgroundColor:'white', borderRight:'1px solid #e5e7eb', display:'flex', flexDirection:'column', padding:'20px 0', overflowY:'auto' },
+  sidebarLogo:{ fontSize:'20px', fontWeight:'900', color:'#4F46E5', padding:'0 20px 24px', letterSpacing:'-0.5px' },
+  navItem:{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 20px', border:'none', background:'none', fontSize:'14px', cursor:'pointer', width:'100%', textAlign:'left', transition:'all 0.15s', borderRadius:0 },
+  navIcon:{ fontSize:'16px', width:20, textAlign:'center' },
+  sidebarSpacer:{ flex:1 },
+  sidebarUser:{ display:'flex', alignItems:'center', gap:'10px', padding:'12px 20px', borderTop:'1px solid #e5e7eb' },
+  userAvatar:{ width:36, height:36, borderRadius:'50%', backgroundColor:'#EEF2FF', color:'#4F46E5', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'16px', fontWeight:'700', flexShrink:0 },
+  userName:{ fontSize:'13px', fontWeight:'700', color:'#111827' },
+  userRole:{ fontSize:'11px', color:'#9ca3af' },
+  logoutBtn:{ margin:'8px 12px 12px', padding:'9px', border:'1.5px solid #e5e7eb', borderRadius:'8px', background:'white', fontSize:'13px', fontWeight:'600', color:'#6b7280', cursor:'pointer' },
+  main:{ flex:1, overflowY:'auto', padding:'28px' },
+  topBar:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px' },
+  pageTitle:{ fontSize:'24px', fontWeight:'800', color:'#111827', margin:0 },
+  pageSubtitle:{ fontSize:'14px', color:'#6b7280', marginTop:'4px' },
+  statsRow:{ display:'flex', gap:'16px', marginBottom:'24px' },
+  statCard:{ flex:1, backgroundColor:'white', borderRadius:'12px', padding:'16px 20px', border:'1px solid #e5e7eb', display:'flex', alignItems:'center', gap:'14px' },
+  statIcon:{ fontSize:'28px' },
+  statLabel:{ fontSize:'10px', fontWeight:'700', color:'#9ca3af', letterSpacing:'1px' },
+  statValue:{ fontSize:'26px', fontWeight:'800', color:'#111827' },
+  contentRow:{ display:'flex', gap:'24px', alignItems:'flex-start' },
+  mainCol:{ flex:1, minWidth:0 },
+  joinCard:{ backgroundColor:'white', borderRadius:'12px', padding:'24px', border:'1px solid #e5e7eb', marginBottom:'24px', boxShadow:'0 1px 4px rgba(0,0,0,0.05)' },
+  joinCardTitle:{ fontSize:'16px', fontWeight:'700', color:'#111827', marginBottom:'8px', display:'flex', alignItems:'center', justifyContent:'space-between' },
+  joinCardDesc:{ fontSize:'13px', color:'#6b7280', marginBottom:'16px' },
+  pinInput:{ width:'100%', padding:'12px 14px', fontSize:'16px', border:'1.5px solid #e5e7eb', borderRadius:'8px', outline:'none', marginBottom:'10px', boxSizing:'border-box', color:'#111827', letterSpacing:'3px' },
+  joinSessionBtn:{ width:'100%', padding:'12px', backgroundColor:'white', color:'#374151', border:'1.5px solid #e5e7eb', borderRadius:'8px', fontSize:'14px', fontWeight:'600', cursor:'pointer' },
+  sectionBar:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px' },
+  sectionTitle:{ fontSize:'16px', fontWeight:'700', color:'#111827' },
+  viewAllBtn:{ background:'none', border:'none', color:'#4F46E5', fontSize:'13px', fontWeight:'600', cursor:'pointer' },
+  classGrid:{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:'12px', marginBottom:'24px' },
+  classCard:{ backgroundColor:'white', borderRadius:'12px', padding:'16px', border:'1px solid #e5e7eb', boxShadow:'0 1px 4px rgba(0,0,0,0.04)' },
+  classBadgeActive:{ display:'inline-block', fontSize:'10px', fontWeight:'700', color:'white', backgroundColor:'#10B981', padding:'3px 8px', borderRadius:'4px', marginBottom:'10px', letterSpacing:'0.5px' },
+  classBadgeDone:{ display:'inline-block', fontSize:'10px', fontWeight:'700', color:'#6b7280', backgroundColor:'#f3f4f6', padding:'3px 8px', borderRadius:'4px', marginBottom:'10px', letterSpacing:'0.5px' },
+  className:{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'4px' },
+  classTeacher:{ fontSize:'12px', color:'#6b7280', marginBottom:'12px' },
+  enterClassBtn:{ width:'100%', padding:'8px', backgroundColor:'#EEF2FF', color:'#4F46E5', border:'none', borderRadius:'6px', fontSize:'12px', fontWeight:'700', cursor:'pointer' },
+  rightCol:{ width:260, flexShrink:0 },
+  sessionListCard:{ backgroundColor:'white', borderRadius:'12px', padding:'16px', border:'1px solid #e5e7eb' },
+  sessionListHeader:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px' },
+  sessionListTitle:{ fontSize:'14px', fontWeight:'700', color:'#111827' },
+  sessionListBadge:{ fontSize:'11px', fontWeight:'700', color:'white', backgroundColor:'#4F46E5', padding:'3px 10px', borderRadius:'20px' },
+  sessionListItem:{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 0', borderBottom:'1px solid #f3f4f6' },
+  sessionListIcon:{ fontSize:'18px', flexShrink:0 },
+  sessionListInfo:{ flex:1 },
+  sessionListName:{ fontSize:'13px', fontWeight:'600', color:'#111827' },
+  sessionListSub:{ fontSize:'11px', color:'#6b7280' },
+  sessionListStatus:{ fontSize:'11px', fontWeight:'600' },
+  emptyState:{ textAlign:'center', padding:'60px 20px', backgroundColor:'white', borderRadius:'12px', border:'1px solid #e5e7eb' },
+  emptyIcon:{ fontSize:'48px', marginBottom:'12px' },
+  emptyTitle:{ fontSize:'18px', fontWeight:'700', color:'#374151', marginBottom:'8px' },
+  emptyText:{ fontSize:'14px', color:'#6b7280' },
+  sessionGrid:{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:'16px' },
+  liveSessionCard:{ backgroundColor:'white', borderRadius:'12px', padding:'20px', border:'1px solid #e5e7eb', boxShadow:'0 1px 4px rgba(0,0,0,0.05)' },
+  liveCardBadge:{ fontSize:'12px', fontWeight:'700', color:'#DC2626', backgroundColor:'#FEE2E2', padding:'4px 10px', borderRadius:'20px', display:'inline-block', marginBottom:'12px' },
+  liveCardName:{ fontSize:'16px', fontWeight:'700', color:'#111827', marginBottom:'4px' },
+  liveCardTeacher:{ fontSize:'13px', color:'#6b7280', marginBottom:'12px' },
+  liveCardStats:{ display:'flex', justifyContent:'space-between', fontSize:'12px', color:'#6b7280', marginBottom:'14px' },
+  enterBtn:{ width:'100%', padding:'10px', backgroundColor:'#4F46E5', color:'white', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:'700', cursor:'pointer' },
+  onlineBadge:{ fontSize:'12px', fontWeight:'700', color:'#10B981', backgroundColor:'#D1FAE5', padding:'4px 10px', borderRadius:'20px' },
+  participantGrid:{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))', gap:'12px' },
+  participantCard:{ backgroundColor:'white', borderRadius:'12px', padding:'16px', border:'1px solid #e5e7eb', textAlign:'center' },
+  participantAvatar:{ width:48, height:48, borderRadius:'50%', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'20px', fontWeight:'700', margin:'0 auto 10px' },
+  participantName:{ fontSize:'13px', fontWeight:'600', color:'#111827', marginBottom:'4px' },
+  participantOnline:{ fontSize:'11px', color:'#10B981', fontWeight:'600' },
+  profileCard:{ backgroundColor:'white', borderRadius:'12px', padding:'28px', border:'1px solid #e5e7eb', maxWidth:480 },
+  profileField:{ marginBottom:'16px' },
+  profileLabel:{ fontSize:'13px', fontWeight:'700', color:'#374151', marginBottom:'6px', display:'block' },
+  profileInput:{ width:'100%', padding:'10px 13px', fontSize:'14px', border:'1.5px solid #e2e8f0', borderRadius:'8px', outline:'none', color:'#1e293b', boxSizing:'border-box' },
+  profileInputReadonly:{ backgroundColor:'#f8fafc', color:'#94a3b8', cursor:'not-allowed' },
+  profileSaveBtn:{ padding:'12px 28px', backgroundColor:'#4F46E5', color:'white', border:'none', borderRadius:'8px', fontSize:'14px', fontWeight:'700', cursor:'pointer' },
+  profileMsg:{ marginTop:12, fontSize:13, fontWeight:'500', padding:'8px 12px', borderRadius:'6px', border:'1px solid transparent' },
 };
 
 export default App;
