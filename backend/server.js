@@ -54,6 +54,10 @@ const corsHandler = (origin, callback) => {
   }
 };
 
+// Explicit preflight handler — must be before app.use(cors()) and all routes.
+// Without this, browsers sending OPTIONS preflight with a custom origin function
+// may not receive Access-Control-Allow-Origin before other middleware runs.
+app.options('*', cors({ origin: corsHandler, credentials: true }));
 app.use(cors({ origin: corsHandler, credentials: true }));
 
 const io = new Server(server, {
@@ -1212,14 +1216,6 @@ server.listen(PORT, "0.0.0.0", () => {
 });
 
 // ✅ THEN CONNECT DB (non-blocking)
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => {
-    console.log("✅ MongoDB Connected");
-  })
-  .catch(err => {
-    console.error("❌ MongoDB connection failed", err);
-    // ⚠️ DON'T STOP SERVER
-  });
 
 // ============================================
 // GRACEFUL SHUTDOWN (Add at bottom of file)
