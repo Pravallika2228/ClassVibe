@@ -31,27 +31,34 @@ const Message = require('./models/Message');
 const app = express();
 const server = http.createServer(app);
 
-const allowedOrigins = [
-  process.env.FRONTEND_URL,
-  "http://localhost:3000",
-  "http://192.168.1.131:3000"
-].filter(Boolean);
+// ── CORS origin checker ───────────────────────────────────────────────────
+// Allowed:
+//   1. Exact match on FRONTEND_URL env var  (production deployment)
+//   2. localhost or 127.0.0.1 on any port   (local dev, http or https)
+//   3. Any 192.168.x.x on any port          (LAN / mobile dev, http or https)
+// Everything else is rejected to keep production security intact.
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true; // no Origin header = server-to-server or same-origin — allow
+  if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) return true;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  if (/^https?:\/\/192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$/.test(origin)) return true;
+  return false;
+};
 
-app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL,
-    "http://localhost:3000"
-  ],
-  credentials: true
-}));
+const corsHandler = (origin, callback) => {
+  if (isAllowedOrigin(origin)) {
+    callback(null, true);
+  } else {
+    console.warn(`CORS blocked: ${origin}`);
+    callback(new Error(`Origin not allowed by CORS policy: ${origin}`));
+  }
+};
+
+app.use(cors({ origin: corsHandler, credentials: true }));
 
 const io = new Server(server, {
   cors: {
-    origin: [
-      process.env.FRONTEND_URL,
-      "http://localhost:3000",
-      "http://192.168.1.131:3000"
-    ].filter(Boolean),
+    origin: corsHandler,
     methods: ["GET", "POST"],
     credentials: true
   },
