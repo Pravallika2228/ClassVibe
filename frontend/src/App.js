@@ -48,10 +48,13 @@ function App() {
 
   const [scheduledSessions, setScheduledSessions] = useState([]);
   const [studentView, setStudentView] = useState('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [profileName, setProfileName] = useState('');
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMsg, setProfileMsg] = useState('');
+  const [quizData, setQuizData] = useState([]);
+  const [quizLoading, setQuizLoading] = useState(false);
 
   // ✅ NEW: Three-dots menu state
   const [openMenuId, setOpenMenuId]           = useState(null); // which card's menu is open
@@ -260,7 +263,7 @@ function App() {
 
   const handleStudentPinJoin = async () => {
     const pin = pinInput.trim();
-    if (!/^\d{4,6}$/.test(pin)) { alert('Please enter a valid 4-6 digit PIN'); return; }
+    if (!/^\d{6}$/.test(pin)) { alert('Please enter a valid 6-digit PIN'); return; }
     try {
       const token = localStorage.getItem('token');
       const API = process.env.REACT_APP_API_URL || 'https://classvibe-backend.onrender.com';
@@ -280,6 +283,27 @@ function App() {
   const handleProfileSave = async () => {
     if (!profileName.trim()) { setProfileMsg('Name cannot be empty'); return; }
     setProfileSaving(true); setProfileMsg('');
+
+    // Defined here (outer function scope) so both try and catch can access it
+    const patchUser = (base) => {
+      const updated = { ...base, name: profileName.trim(), username: profileName.trim() };
+      localStorage.setItem('user', JSON.stringify(updated));
+      setUser(updated);
+      setCurrentGroup(prev => {
+        if (!prev) return prev;
+        const uid = String(updated._id || updated.id || '');
+        return {
+          ...prev,
+          members: (prev.members || []).map(m => {
+            const mId = String(m.user?._id || m.user?.id || m._id || m.id || '');
+            if (uid && mId === uid) return { ...m, user: { ...m.user, name: updated.name, username: updated.username } };
+            return m;
+          })
+        };
+      });
+      return updated;
+    };
+
     try {
       const token = localStorage.getItem('token');
       const API = process.env.REACT_APP_API_URL || 'https://classvibe-backend.onrender.com';
@@ -290,20 +314,45 @@ function App() {
       });
       const data = await res.json();
       if (res.ok) {
-        const updated = { ...user, name: profileName.trim(), username: profileName.trim() };
-        localStorage.setItem('user', JSON.stringify(updated));
-        setUser(updated);
+        patchUser(data.user || user);
         setProfileMsg('Profile updated successfully!');
       } else {
         setProfileMsg(data.error || 'Update failed');
       }
     } catch {
-      const updated = { ...user, name: profileName.trim(), username: profileName.trim() };
-      localStorage.setItem('user', JSON.stringify(updated));
-      setUser(updated);
+      patchUser(user);
       setProfileMsg('Saved locally');
     } finally { setProfileSaving(false); }
   };
+
+  const loadStudentQuizzes = useCallback(async () => {
+    if (!groups.length) { setQuizData([]); return; }
+    setQuizLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const API = process.env.REACT_APP_API_URL || 'https://classvibe-backend.onrender.com';
+      const results = await Promise.all(
+        groups.map(g =>
+          fetch(`${API}/api/quiz/group/${g._id ?? g.id}/history`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }).then(r => r.ok ? r.json() : { quizzes: [] }).catch(() => ({ quizzes: [] }))
+        )
+      );
+      const allQuizzes = results.flatMap((r, i) =>
+        (r.quizzes || r.sessions || []).map(q => ({
+          ...q,
+          groupName: groups[i]?.groupName || 'Unknown',
+          groupId: groups[i]?._id ?? groups[i]?.id
+        }))
+      );
+      setQuizData(allQuizzes);
+    } catch { setQuizData([]); }
+    finally { setQuizLoading(false); }
+  }, [groups]);
+
+  useEffect(() => {
+    if (studentView === 'quizzes' && user?.role === 'student') loadStudentQuizzes();
+  }, [studentView, loadStudentQuizzes, user?.role]);
 
   const isAdmin = !!(currentGroup && user && currentGroup.admin &&
     getUserId(user) && (currentGroup.admin._id === getUserId(user) || currentGroup.admin._id === user?.id || currentGroup.admin._id === user?._id));
@@ -453,9 +502,39 @@ function App() {
         groupName={currentGroup ? currentGroup.groupName : ''}
         userRole={user?.role}
         socket={socket}
+        group={currentGroup}
       />
 
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} group={currentGroup} messages={messages} currentUserId={getUserId(user)} userRole={user?.role} onLeaveMeeting={handleLeaveMeeting} onGroupJoined={g => handleGroupJoined(g)} />
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
+        group={currentGroup}
+        messages={messages}
+        currentUserId={getUserId(user)}
+        userRole={user?.role}
+        onLeaveMeeting={handleLeaveMeeting}
+        onLogout={handleLogout}
+        onGroupJoined={g => handleGroupJoined(g)}
+        onDashboard={() => { setCurrentGroup(null); setMessages([]); if (user?.role === 'student') setStudentView('dashboard'); }}
+        onLiveSession={() => { setCurrentGroup(null); setMessages([]); if (user?.role === 'student') setStudentView('live'); }}
+        onUserUpdated={(updatedUser) => {
+          setUser(updatedUser);
+          setProfileName(updatedUser.name || updatedUser.username || '');
+          // Patch the member name in currentGroup so participant list refreshes immediately
+          setCurrentGroup(prev => {
+            if (!prev) return prev;
+            const uid = String(updatedUser._id || updatedUser.id || '');
+            return {
+              ...prev,
+              members: (prev.members || []).map(m => {
+                const mId = String(m.user?._id || m.user?.id || m._id || m.id || '');
+                if (uid && mId === uid) return { ...m, user: { ...m.user, name: updatedUser.name, username: updatedUser.username } };
+                return m;
+              })
+            };
+          });
+        }}
+      />
 
       {showQuizCreator && (
         <QuizCreator groupId={currentGroup?._id} onClose={() => setShowQuizCreator(false)}
@@ -851,82 +930,134 @@ function App() {
             <div style={SD.shell}>
 
               {/* LEFT SIDEBAR */}
-              <div style={SD.sidebar}>
-                <div style={SD.sidebarLogo}>ClassVibe</div>
+              <div style={{ ...SD.sidebar, width: sidebarCollapsed ? 64 : 220, transition:'width 0.22s ease' }}>
+                {/* Logo row + collapse toggle */}
+                <div style={SD.logoRow}>
+                  {!sidebarCollapsed && (
+                    <div style={SD.logoText}>
+                      <span style={{ fontSize:20 }}>🎓</span>
+                      ClassVibe
+                    </div>
+                  )}
+                  <button style={SD.toggleBtn} onClick={() => setSidebarCollapsed(v => !v)} title={sidebarCollapsed ? 'Expand' : 'Collapse'}>
+                    {sidebarCollapsed ? '▶' : '◀'}
+                  </button>
+                </div>
+
+                {/* Nav items */}
                 {[
-                  { icon:'📊', label:'Dashboard',     view:'dashboard' },
-                  { icon:'⚡', label:'Live Sessions',  view:'live' },
-                  { icon:'👥', label:'Participants',   view:'participants' },
-                  { icon:'👤', label:'Profile',        view:'profile' },
+                  { icon:'📊', label:'Dashboard',    view:'dashboard' },
+                  { icon:'📅', label:'Schedule',     view:'schedule' },
+                  { icon:'📝', label:'Quizzes',      view:'quizzes' },
+                  { icon:'📋', label:'Session List', view:'sessionlist' },
+                  { icon:'⚙️', label:'Settings',     view:'settings' },
                 ].map((item, i) => (
-                  <button key={i} style={{ ...SD.navItem, backgroundColor: studentView === item.view ? '#EEF2FF' : 'transparent', color: studentView === item.view ? '#4F46E5' : '#6b7280', fontWeight: studentView === item.view ? '700' : '500' }} onClick={() => setStudentView(item.view)}>
+                  <button key={i}
+                    title={sidebarCollapsed ? item.label : undefined}
+                    style={{ ...SD.navItem, justifyContent: sidebarCollapsed ? 'center' : 'flex-start', backgroundColor: studentView === item.view ? '#EEF2FF' : 'transparent', color: studentView === item.view ? '#4F46E5' : '#6b7280', fontWeight: studentView === item.view ? '700' : '500' }}
+                    onClick={() => setStudentView(item.view)}>
                     <span style={SD.navIcon}>{item.icon}</span>
-                    <span>{item.label}</span>
+                    {!sidebarCollapsed && <span>{item.label}</span>}
                   </button>
                 ))}
+
                 <div style={SD.sidebarSpacer} />
-                <div style={SD.sidebarUser}>
-                  <div style={SD.userAvatar}>{displayName.charAt(0).toUpperCase()}</div>
-                  <div><div style={SD.userName}>{displayName}</div><div style={SD.userRole}>Student</div></div>
-                </div>
-                <button onClick={handleLogout} style={SD.logoutBtn}>Logout</button>
+
+                {/* User info */}
+                {!sidebarCollapsed ? (
+                  <div style={SD.sidebarUser}>
+                    <div style={SD.userAvatar}>{displayName.charAt(0).toUpperCase()}</div>
+                    <div><div style={SD.userName}>{displayName}</div><div style={SD.userRole}>Student</div></div>
+                  </div>
+                ) : (
+                  <div style={{ display:'flex', justifyContent:'center', padding:'8px 0' }}>
+                    <div style={SD.userAvatar} title={displayName}>{displayName.charAt(0).toUpperCase()}</div>
+                  </div>
+                )}
+
+                {/* Logout */}
+                <button onClick={handleLogout} style={SD.logoutBtn} title={sidebarCollapsed ? 'Logout' : undefined}>
+                  {sidebarCollapsed ? '🚪' : '→ Logout'}
+                </button>
               </div>
 
               {/* MAIN CONTENT */}
               <div style={SD.main}>
 
-                {/* ── DASHBOARD ── */}
+                {/* ════ DASHBOARD ════ */}
                 {studentView === 'dashboard' && (<>
                   <div style={SD.topBar}>
                     <div>
                       <h1 style={SD.pageTitle}>Welcome back, {displayName}!</h1>
                       <p style={SD.pageSubtitle}>
-                        {liveGroups.length > 0 ? `You have ${liveGroups.length} live session${liveGroups.length > 1 ? 's' : ''} happening right now` : 'No live sessions right now'}
-                        {endedGroups.length > 0 ? ` and ${endedGroups.length} completed` : ''}
+                        {liveGroups.length > 0
+                          ? `You have ${liveGroups.length} live session${liveGroups.length > 1 ? 's' : ''} happening right now`
+                          : 'No live sessions right now — check back soon'}
                       </p>
                     </div>
                   </div>
 
+                  {/* 4 Stat cards */}
                   <div style={SD.statsRow}>
                     {[
-                      { label:'SCHEDULE',  value:0,                 icon:'📅' },
-                      { label:'LIVE NOW',  value:liveGroups.length, icon:'⚡' },
-                      { label:'COMPLETED', value:endedGroups.length,icon:'✅' },
+                      { label:'ACTIVE SESSIONS',  value:liveGroups.length,  icon:'⚡', color:'#10B981', bg:'#D1FAE5' },
+                      { label:'SESSIONS JOINED',  value:groups.length,       icon:'📚', color:'#6366f1', bg:'#EEF2FF' },
+                      { label:'COMPLETED',        value:endedGroups.length,  icon:'✅', color:'#6b7280', bg:'#F3F4F6' },
+                      { label:'UPCOMING',         value:0,                   icon:'📅', color:'#F59E0B', bg:'#FEF3C7' },
                     ].map((s, i) => (
                       <div key={i} style={SD.statCard}>
-                        <div style={SD.statIcon}>{s.icon}</div>
-                        <div><div style={SD.statLabel}>{s.label}</div><div style={SD.statValue}>{s.value}</div></div>
+                        <div style={{ ...SD.statIconBox, backgroundColor: s.bg, color: s.color }}>{s.icon}</div>
+                        <div><div style={SD.statLabel}>{s.label}</div><div style={{ ...SD.statValue, color: s.color }}>{s.value}</div></div>
                       </div>
                     ))}
                   </div>
 
+                  {/* Active session banner (if any) */}
+                  {liveGroups.length > 0 && (
+                    <div style={SD.activeBanner}>
+                      <div style={SD.activeBannerLeft}>
+                        <span style={SD.activePulse} />
+                        <div>
+                          <div style={SD.activeBannerTitle}>Active Session: {liveGroups[0].groupName}</div>
+                          <div style={SD.activeBannerSub}>by {liveGroups[0].admin?.name || liveGroups[0].admin?.username || 'Teacher'} · {(liveGroups[0].members || []).length} members</div>
+                        </div>
+                      </div>
+                      <button style={SD.activeBannerBtn} onClick={() => selectGroup(liveGroups[0]._id ?? liveGroups[0].id)}>
+                        Join Now →
+                      </button>
+                    </div>
+                  )}
+
                   <div style={SD.contentRow}>
                     <div style={SD.mainCol}>
-                      {/* Join Session card */}
+                      {/* Join Session card — compact */}
                       <div style={SD.joinCard}>
-                        <div style={SD.joinCardTitle}>Join Live Session <span style={{ fontSize:18, color:'#9ca3af' }}>⠿⠿</span></div>
-                        <p style={SD.joinCardDesc}>Enter PIN or scan QR to join an active classroom session instantly.</p>
-                        <input style={SD.pinInput} placeholder="Enter Session PIN" maxLength={6} value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, ''))} onKeyDown={e => e.key === 'Enter' && handleStudentPinJoin()} />
-                        <button style={SD.joinSessionBtn} onClick={handleStudentPinJoin}>Join Session</button>
+                        <div style={SD.joinCardTitle}>🔑 Join Live Session</div>
+                        <p style={SD.joinCardDesc}>Enter your 6-digit session PIN from the teacher.</p>
+                        <input style={SD.pinInput} placeholder="• • • • • •" maxLength={6} value={pinInput} onChange={e => setPinInput(e.target.value.replace(/\D/g, ''))} onKeyDown={e => e.key === 'Enter' && handleStudentPinJoin()} />
+                        <button style={{ ...SD.joinSessionBtn, backgroundColor: pinInput.length === 6 ? '#4F46E5' : '#e5e7eb', color: pinInput.length === 6 ? 'white' : '#9ca3af', border:'none' }} onClick={handleStudentPinJoin}>
+                          Join Session
+                        </button>
                       </div>
 
                       {/* My Classes */}
                       {groups.length > 0 && (<>
                         <div style={SD.sectionBar}>
                           <h2 style={SD.sectionTitle}>My Classes</h2>
-                          <button style={SD.viewAllBtn} onClick={() => setStudentView('live')}>View Full Schedule &gt;</button>
+                          <button style={SD.viewAllBtn} onClick={() => setStudentView('live')}>View All →</button>
                         </div>
                         <div style={SD.classGrid}>
                           {liveGroups.slice(0, 2).map(group => (
                             <div key={group._id} style={SD.classCard}>
-                              <div style={SD.classBadgeActive}>LIVE</div>
+                              <div style={SD.classBadgeActive}>● LIVE</div>
                               <div style={SD.className}>{group.groupName}</div>
                               <div style={SD.classTeacher}>{group.admin?.name || group.admin?.username || 'Teacher'}</div>
+                              <div style={{ fontSize:12, color:'#6b7280', marginBottom:12 }}>👥 {(group.members||[]).length} members · {(group.onlineUsers||[]).length} online</div>
                               <button style={SD.enterClassBtn} onClick={() => selectGroup(group._id ?? group.id)}>Enter Classroom →</button>
                             </div>
                           ))}
                           {endedGroups.slice(0, Math.max(0, 3 - liveGroups.slice(0,2).length)).map(group => (
-                            <div key={group._id} style={{ ...SD.classCard, opacity:0.75 }}>
+                            <div key={group._id} style={{ ...SD.classCard, opacity:0.7 }}>
                               <div style={SD.classBadgeDone}>COMPLETED</div>
                               <div style={SD.className}>{group.groupName}</div>
                               <div style={SD.classTeacher}>{group.admin?.name || group.admin?.username || 'Teacher'}</div>
@@ -949,17 +1080,17 @@ function App() {
                     <div style={SD.rightCol}>
                       <div style={SD.sessionListCard}>
                         <div style={SD.sessionListHeader}>
-                          <span style={SD.sessionListTitle}>Session List</span>
-                          <span style={SD.sessionListBadge}>{groups.length} Session{groups.length !== 1 ? 's' : ''}</span>
+                          <span style={SD.sessionListTitle}>Recent Sessions</span>
+                          <span style={SD.sessionListBadge}>{groups.length}</span>
                         </div>
-                        {groups.slice(0, 6).map((g, i) => (
+                        {groups.slice(0, 7).map((g, i) => (
                           <div key={i} style={SD.sessionListItem}>
-                            <div style={SD.sessionListIcon}>📖</div>
+                            <div style={{ ...SD.sessionListDot, backgroundColor: g.isActive ? '#10B981' : '#e5e7eb' }} />
                             <div style={SD.sessionListInfo}>
                               <div style={SD.sessionListName}>{g.groupName}</div>
                               <div style={SD.sessionListSub}>{g.admin?.name || g.admin?.username || 'Teacher'}</div>
                             </div>
-                            <div style={{ ...SD.sessionListStatus, color: g.isActive ? '#10B981' : '#9ca3af' }}>
+                            <div style={{ fontSize:10, fontWeight:'700', color: g.isActive ? '#10B981' : '#9ca3af' }}>
                               {g.isActive ? 'LIVE' : formatDateTime(g.createdAt).date}
                             </div>
                           </div>
@@ -970,66 +1101,123 @@ function App() {
                   </div>
                 </>)}
 
-                {/* ── LIVE SESSIONS ── */}
+                {/* ════ LIVE SESSIONS ════ */}
                 {studentView === 'live' && (<>
-                  <div style={SD.topBar}><h1 style={SD.pageTitle}>Live Sessions</h1></div>
+                  <div style={SD.topBar}>
+                    <h1 style={SD.pageTitle}>Live Sessions</h1>
+                    <button style={SD.refreshBtn} onClick={() => loadGroups(false)}>↻ Refresh</button>
+                  </div>
                   {liveGroups.length === 0 ? (
                     <div style={SD.emptyState}>
                       <div style={SD.emptyIcon}>⚡</div>
                       <p style={SD.emptyTitle}>No live sessions right now</p>
                       <p style={SD.emptyText}>Your teacher hasn't started a session yet. Check back soon!</p>
+                      <button style={{ marginTop:16, ...SD.enterClassBtn, display:'inline-block', width:'auto', padding:'10px 24px' }} onClick={() => loadGroups(false)}>Refresh</button>
                     </div>
                   ) : (
                     <div style={SD.sessionGrid}>
                       {liveGroups.map(group => (
                         <div key={group._id} style={SD.liveSessionCard}>
-                          <div style={SD.liveCardBadge}>● Live Now</div>
-                          <div style={SD.liveCardName}>{group.groupName}</div>
-                          <div style={SD.liveCardTeacher}>by {group.admin?.name || group.admin?.username || 'Teacher'}</div>
-                          <div style={SD.liveCardStats}>
-                            <span>👥 {(group.members || []).length} members</span>
-                            <span style={{ color:'#10B981', fontWeight:'600' }}>{(group.onlineUsers || []).length} online</span>
+                          <div style={SD.liveCardHeader}>
+                            <span style={SD.liveCardBadge}><span style={SD.liveDot} />Live Now</span>
+                            <span style={{ fontSize:12, color:'#6b7280' }}>👥 {(group.members||[]).length}</span>
                           </div>
-                          <button style={SD.enterBtn} onClick={() => selectGroup(group._id ?? group.id)}>Enter Classroom →</button>
+                          <div style={SD.liveCardName}>{group.groupName}</div>
+                          <div style={SD.liveCardTeacher}>
+                            <span style={SD.teacherChip}>{(group.admin?.name || group.admin?.username || 'Teacher').charAt(0).toUpperCase()}</span>
+                            {group.admin?.name || group.admin?.username || 'Teacher'}
+                          </div>
+                          <div style={SD.liveCardMeta}>
+                            <span style={{ color:'#10B981', fontWeight:'600' }}>● SESSION ACTIVE</span>
+                            <span>{(group.onlineUsers||[]).length} online</span>
+                          </div>
+                          <button style={SD.enterBtn} onClick={() => selectGroup(group._id ?? group.id)}>
+                            Join Classroom →
+                          </button>
                         </div>
                       ))}
                     </div>
                   )}
+
+                  {/* All sessions history */}
+                  {endedGroups.length > 0 && (<>
+                    <div style={{ ...SD.sectionBar, marginTop:32 }}>
+                      <h2 style={{ ...SD.sectionTitle, fontSize:15 }}>Past Sessions</h2>
+                    </div>
+                    <div style={SD.sessionGrid}>
+                      {endedGroups.map(group => (
+                        <div key={group._id} style={{ ...SD.liveSessionCard, opacity:0.75, borderColor:'#f3f4f6' }}>
+                          <div style={SD.liveCardHeader}>
+                            <span style={{ ...SD.liveCardBadge, color:'#6b7280', backgroundColor:'#f3f4f6' }}>Completed</span>
+                            <span style={{ fontSize:12, color:'#9ca3af' }}>👥 {(group.members||[]).length}</span>
+                          </div>
+                          <div style={SD.liveCardName}>{group.groupName}</div>
+                          <div style={SD.liveCardTeacher}>
+                            <span style={SD.teacherChip}>{(group.admin?.name || group.admin?.username || 'T').charAt(0).toUpperCase()}</span>
+                            {group.admin?.name || group.admin?.username || 'Teacher'}
+                          </div>
+                          <div style={SD.liveCardMeta}>
+                            <span style={{ color:'#9ca3af' }}>● SESSION ENDED</span>
+                            <span>{formatDateTime(group.createdAt).date}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>)}
                 </>)}
 
-                {/* ── PARTICIPANTS ── */}
+                {/* ════ PARTICIPANTS ════ */}
                 {studentView === 'participants' && (<>
-                  <div style={SD.topBar}><h1 style={SD.pageTitle}>Participants</h1></div>
+                  <div style={SD.topBar}>
+                    <h1 style={SD.pageTitle}>Participants</h1>
+                    <button style={SD.refreshBtn} onClick={() => loadGroups(false)}>↻ Refresh</button>
+                  </div>
                   {liveGroups.length === 0 ? (
                     <div style={SD.emptyState}>
                       <div style={SD.emptyIcon}>👥</div>
                       <p style={SD.emptyTitle}>No active sessions</p>
-                      <p style={SD.emptyText}>Participants will appear here when you're in an active session.</p>
+                      <p style={SD.emptyText}>Join an active session to see participants here.</p>
                     </div>
                   ) : liveGroups.map(group => {
                     const onlineIds = new Set((group.onlineUsers || []).map(u => String(u._id || u.id || u)));
                     const onlineMembers = (group.members || []).filter(m => {
                       const mId = String(m.user?._id || m.user?.id || m._id || m.id || '');
-                      return onlineIds.has(mId);
+                      return mId && onlineIds.has(mId);
                     });
+                    const adminId = String(group.admin?._id ?? group.admin?.id ?? group.admin ?? '');
                     const colors = ['#6366f1','#10B981','#F59E0B','#EF4444','#3B82F6','#8B5CF6','#EC4899','#14B8A6'];
                     return (
-                      <div key={group._id} style={{ marginBottom:28 }}>
+                      <div key={group._id} style={{ marginBottom:32 }}>
                         <div style={SD.sectionBar}>
                           <h2 style={SD.sectionTitle}>{group.groupName}</h2>
                           <span style={SD.onlineBadge}>{onlineMembers.length} Online</span>
                         </div>
                         {onlineMembers.length === 0 ? (
-                          <p style={{ color:'#9ca3af', fontSize:14 }}>No one online right now. <button style={{ color:'#4F46E5', background:'none', border:'none', cursor:'pointer', fontSize:13 }} onClick={() => loadGroups(false)}>Refresh</button></p>
+                          <div style={{ ...SD.emptyState, padding:'32px 20px' }}>
+                            <div style={{ fontSize:32, marginBottom:8 }}>👥</div>
+                            <p style={{ ...SD.emptyTitle, fontSize:15 }}>No one online right now</p>
+                          </div>
                         ) : (
-                          <div style={SD.participantGrid}>
+                          <div style={SD.participantListWrap}>
                             {onlineMembers.map((m, i) => {
                               const name = m.user?.name || m.user?.username || m.name || m.username || `Member ${i+1}`;
+                              const mId = String(m.user?._id || m.user?.id || m._id || m.id || '');
+                              const isTeacher = mId && mId === adminId;
                               return (
-                                <div key={i} style={SD.participantCard}>
-                                  <div style={{ ...SD.participantAvatar, backgroundColor: colors[i % colors.length] }}>{name.charAt(0).toUpperCase()}</div>
-                                  <div style={SD.participantName}>{name}</div>
-                                  <div style={SD.participantOnline}>● Online</div>
+                                <div key={i} style={SD.participantRow}>
+                                  <div style={{ ...SD.participantAvatarSm, backgroundColor: colors[i % colors.length] }}>
+                                    {name.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div style={SD.participantInfo}>
+                                    <div style={SD.participantNameText}>{name}</div>
+                                    <div style={isTeacher ? SD.roleTeacher : SD.roleStudent}>
+                                      {isTeacher ? '👨‍🏫 Teacher' : '👤 Student'}
+                                    </div>
+                                  </div>
+                                  <div style={SD.onlineIndicator}>
+                                    <span style={SD.onlineDotGreen} />
+                                    Online
+                                  </div>
                                 </div>
                               );
                             })}
@@ -1040,31 +1228,220 @@ function App() {
                   })}
                 </>)}
 
-                {/* ── PROFILE ── */}
-                {studentView === 'profile' && (<>
-                  <div style={SD.topBar}><h1 style={SD.pageTitle}>Profile</h1></div>
-                  <div style={SD.profileCard}>
-                    <div style={SD.profileField}>
-                      <label style={SD.profileLabel}>Display Name</label>
-                      <input style={SD.profileInput} value={profileName} onChange={e => setProfileName(e.target.value)} placeholder="Your name" maxLength={50} />
+                {/* ════ SCHEDULE ════ */}
+                {studentView === 'schedule' && (<>
+                  <div style={SD.topBar}>
+                    <h1 style={SD.pageTitle}>Schedule</h1>
+                    <button style={SD.refreshBtn} onClick={() => loadGroups(false)}>↻ Refresh</button>
+                  </div>
+                  {groups.length === 0 ? (
+                    <div style={SD.emptyState}>
+                      <div style={SD.emptyIcon}>📅</div>
+                      <p style={SD.emptyTitle}>No sessions yet</p>
+                      <p style={SD.emptyText}>Join a session using a PIN — it will appear here.</p>
                     </div>
-                    <div style={SD.profileField}>
-                      <label style={SD.profileLabel}>Email</label>
-                      <input style={{ ...SD.profileInput, ...SD.profileInputReadonly }} value={user?.email || '—'} readOnly />
-                    </div>
-                    <div style={SD.profileField}>
-                      <label style={SD.profileLabel}>Role</label>
-                      <input style={{ ...SD.profileInput, ...SD.profileInputReadonly }} value="Student" readOnly />
-                    </div>
-                    <button style={SD.profileSaveBtn} onClick={handleProfileSave} disabled={profileSaving}>
-                      {profileSaving ? 'Saving…' : 'Save Changes'}
-                    </button>
-                    {profileMsg && (
-                      <div style={{ ...SD.profileMsg, backgroundColor: profileMsg.includes('!') || profileMsg.includes('success') || profileMsg.includes('local') ? '#f0fdf4' : '#fef2f2', color: profileMsg.includes('!') || profileMsg.includes('success') || profileMsg.includes('local') ? '#15803d' : '#dc2626' }}>
-                        {profileMsg}
+                  ) : (<>
+                    {liveGroups.length > 0 && (<>
+                      <div style={{ ...SD.sectionBar, marginBottom:12 }}>
+                        <h2 style={{ ...SD.sectionTitle, color:'#10B981', display:'flex', alignItems:'center', gap:8 }}>
+                          <span style={{ width:8, height:8, borderRadius:'50%', backgroundColor:'#10B981', display:'inline-block' }} />
+                          Live Now
+                        </h2>
+                      </div>
+                      <div style={SD.sessionGrid}>
+                        {liveGroups.map(group => (
+                          <div key={group._id} style={SD.liveSessionCard}>
+                            <div style={SD.liveCardHeader}>
+                              <span style={SD.liveCardBadge}><span style={SD.liveDot} />LIVE</span>
+                              <span style={{ fontSize:11, color:'#6b7280' }}>{formatDateTime(group.createdAt).time}</span>
+                            </div>
+                            <div style={SD.liveCardName}>{group.groupName}</div>
+                            <div style={SD.liveCardTeacher}>
+                              <span style={SD.teacherChip}>{(group.admin?.name || group.admin?.username || 'T').charAt(0).toUpperCase()}</span>
+                              {group.admin?.name || group.admin?.username || 'Teacher'}
+                            </div>
+                            <div style={{ fontSize:11, color:'#6b7280', marginBottom:14 }}>{formatDateTime(group.createdAt).date} · {(group.members||[]).length} members</div>
+                            <button style={SD.enterBtn} onClick={() => selectGroup(group._id ?? group.id)}>Join Now →</button>
+                          </div>
+                        ))}
+                      </div>
+                    </>)}
+                    {endedGroups.length > 0 && (
+                      <div style={{ marginTop: liveGroups.length > 0 ? 28 : 0 }}>
+                        <div style={{ ...SD.sectionBar, marginBottom:12 }}>
+                          <h2 style={{ ...SD.sectionTitle, color:'#6b7280' }}>Past Sessions</h2>
+                        </div>
+                        <div style={SD.sessionGrid}>
+                          {endedGroups.map(group => (
+                            <div key={group._id} style={{ ...SD.liveSessionCard, opacity:0.8, borderColor:'#f3f4f6' }}>
+                              <div style={SD.liveCardHeader}>
+                                <span style={{ ...SD.liveCardBadge, color:'#6b7280', backgroundColor:'#f3f4f6' }}>COMPLETED</span>
+                                <span style={{ fontSize:11, color:'#9ca3af' }}>{formatDateTime(group.createdAt).date}</span>
+                              </div>
+                              <div style={SD.liveCardName}>{group.groupName}</div>
+                              <div style={SD.liveCardTeacher}>
+                                <span style={SD.teacherChip}>{(group.admin?.name || group.admin?.username || 'T').charAt(0).toUpperCase()}</span>
+                                {group.admin?.name || group.admin?.username || 'Teacher'}
+                              </div>
+                              <div style={{ fontSize:11, color:'#9ca3af' }}>{(group.members||[]).length} members attended</div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
+                  </>)}
+                </>)}
+
+                {/* ════ QUIZZES ════ */}
+                {studentView === 'quizzes' && (<>
+                  <div style={SD.topBar}>
+                    <h1 style={SD.pageTitle}>Quizzes</h1>
+                    <button style={SD.refreshBtn} onClick={loadStudentQuizzes}>↻ Refresh</button>
                   </div>
+                  {quizLoading ? (
+                    <div style={{ textAlign:'center', padding:'60px 0', color:'#9ca3af', fontSize:14 }}>Loading quizzes…</div>
+                  ) : quizData.length === 0 ? (
+                    <div style={SD.emptyState}>
+                      <div style={SD.emptyIcon}>📝</div>
+                      <p style={SD.emptyTitle}>No quizzes yet</p>
+                      <p style={SD.emptyText}>Quizzes from your joined classrooms will appear here once the teacher creates them.</p>
+                    </div>
+                  ) : (
+                    <div style={SD.quizGrid}>
+                      {quizData.map((quiz, i) => {
+                        const attempted = quiz.status === 'completed' || (quiz.participants && quiz.participants.some(p => String(p.userId || p._id) === String(user?._id || user?.id)));
+                        const score = quiz.myScore ?? quiz.score ?? null;
+                        const qTitle = quiz.title || quiz.quiz?.title || `Quiz ${i + 1}`;
+                        const qCount = quiz.questions?.length || quiz.quiz?.questions?.length || 0;
+                        return (
+                          <div key={quiz._id || i} style={SD.quizCard}>
+                            <div style={{ ...SD.quizBadge, backgroundColor: attempted ? '#D1FAE5' : '#FEF3C7', color: attempted ? '#065F46' : '#92400E' }}>
+                              {attempted ? '✓ Attempted' : '◌ Not Attempted'}
+                            </div>
+                            <div style={SD.quizTitle}>{qTitle}</div>
+                            <div style={SD.quizMeta}>{quiz.groupName}</div>
+                            {qCount > 0 && <div style={{ fontSize:11, color:'#9ca3af', marginTop:4 }}>{qCount} questions</div>}
+                            {attempted && score !== null && (
+                              <div style={SD.quizScore}>Score: {score}%</div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>)}
+
+                {/* ════ SESSION LIST ════ */}
+                {studentView === 'sessionlist' && (<>
+                  <div style={SD.topBar}>
+                    <h1 style={SD.pageTitle}>Session List</h1>
+                    <button style={SD.refreshBtn} onClick={() => loadGroups(false)}>↻ Refresh</button>
+                  </div>
+                  {groups.length === 0 ? (
+                    <div style={SD.emptyState}>
+                      <div style={SD.emptyIcon}>📋</div>
+                      <p style={SD.emptyTitle}>No sessions joined</p>
+                      <p style={SD.emptyText}>Use a 6-digit PIN to join a session — it will appear here.</p>
+                    </div>
+                  ) : (
+                    <div style={SD.tableWrap}>
+                      <div style={SD.tableHeader}>
+                        <span style={{ flex:2 }}>Session Name</span>
+                        <span style={{ flex:1 }}>Teacher</span>
+                        <span style={{ flex:1 }}>Date</span>
+                        <span style={{ width:110 }}>Status</span>
+                        <span style={{ width:72 }}>Action</span>
+                      </div>
+                      {[...groups].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map((g, i) => (
+                        <div key={g._id} style={{ ...SD.tableRow, backgroundColor: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                          <span style={{ flex:2, fontWeight:'600', color:'#111827', fontSize:13 }}>{g.groupName}</span>
+                          <span style={{ flex:1, fontSize:12, color:'#6b7280' }}>{g.admin?.name || g.admin?.username || 'Teacher'}</span>
+                          <span style={{ flex:1, fontSize:12, color:'#6b7280' }}>{formatDateTime(g.createdAt).date}</span>
+                          <span style={{ width:110 }}>
+                            <span style={{ fontSize:10, fontWeight:'700', padding:'3px 8px', borderRadius:'20px', backgroundColor: g.isActive ? '#D1FAE5' : '#F3F4F6', color: g.isActive ? '#10B981' : '#6b7280' }}>
+                              {g.isActive ? '● LIVE' : '✓ COMPLETED'}
+                            </span>
+                          </span>
+                          <span style={{ width:72 }}>
+                            {g.isActive && (
+                              <button style={{ fontSize:11, padding:'5px 10px', backgroundColor:'#4F46E5', color:'white', border:'none', borderRadius:'6px', cursor:'pointer', fontWeight:'700' }} onClick={() => selectGroup(g._id ?? g.id)}>
+                                Enter
+                              </button>
+                            )}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>)}
+
+                {/* ════ SETTINGS ════ */}
+                {studentView === 'settings' && (<>
+                  <div style={SD.topBar}><h1 style={SD.pageTitle}>Settings</h1></div>
+
+                  {/* Section 1: Profile Information — FUNCTIONAL */}
+                  <div style={SD.settingsCard}>
+                    <div style={SD.settingsCardHeader}>
+                      <div style={SD.settingsCardIcon}>👤</div>
+                      <div>
+                        <div style={SD.settingsCardTitle}>Profile Information</div>
+                        <div style={SD.settingsCardSub}>Update your display name and account info</div>
+                      </div>
+                    </div>
+                    <div style={SD.settingsCardBody}>
+                      {/* Avatar */}
+                      <div style={SD.settingsAvatarRow}>
+                        <div style={SD.settingsAvatarBig}>{(profileName || displayName || 'U').charAt(0).toUpperCase()}</div>
+                        <div>
+                          <div style={{ fontSize:14, fontWeight:'600', color:'#374151' }}>{displayName}</div>
+                          <div style={{ fontSize:12, color:'#9ca3af', marginTop:2 }}>Student account</div>
+                          <div style={{ fontSize:11, color:'#c4b5fd', marginTop:4 }}>Profile photo upload — coming soon</div>
+                        </div>
+                      </div>
+                      <div style={SD.profileField}>
+                        <label style={SD.profileLabel}>Display Name</label>
+                        <input style={SD.profileInput} value={profileName} onChange={e => setProfileName(e.target.value)} placeholder="Your name" maxLength={50} />
+                      </div>
+                      <div style={SD.profileField}>
+                        <label style={SD.profileLabel}>Email</label>
+                        <input style={{ ...SD.profileInput, ...SD.profileInputReadonly }} value={user?.email || '—'} readOnly />
+                        <div style={{ fontSize:11, color:'#9ca3af', marginTop:3 }}>Email address cannot be changed</div>
+                      </div>
+                      <div style={SD.profileField}>
+                        <label style={SD.profileLabel}>Role</label>
+                        <input style={{ ...SD.profileInput, ...SD.profileInputReadonly }} value="Student" readOnly />
+                      </div>
+                      <button style={SD.profileSaveBtn} onClick={handleProfileSave} disabled={profileSaving}>
+                        {profileSaving ? 'Saving…' : 'Save Changes'}
+                      </button>
+                      {profileMsg && (
+                        <div style={{ ...SD.profileMsg, backgroundColor: profileMsg.includes('success') || profileMsg.includes('local') || profileMsg.includes('!') ? '#f0fdf4' : '#fef2f2', color: profileMsg.includes('success') || profileMsg.includes('local') || profileMsg.includes('!') ? '#15803d' : '#dc2626' }}>
+                          {profileMsg}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Sections 2-4: Coming Soon */}
+                  {[
+                    { icon:'🔔', title:'Notifications', sub:'Email and push notification preferences' },
+                    { icon:'🎨', title:'Preferences',   sub:'Theme, language, and display settings' },
+                    { icon:'🔒', title:'Privacy',       sub:'Control your data and privacy settings' },
+                  ].map((sec, i) => (
+                    <div key={i} style={{ ...SD.settingsCard, marginTop:12 }}>
+                      <div style={SD.settingsCardHeader}>
+                        <div style={SD.settingsCardIcon}>{sec.icon}</div>
+                        <div>
+                          <div style={SD.settingsCardTitle}>{sec.title}</div>
+                          <div style={SD.settingsCardSub}>{sec.sub}</div>
+                        </div>
+                      </div>
+                      <div style={{ ...SD.settingsCardBody, display:'flex', alignItems:'center', gap:10, padding:'16px 24px' }}>
+                        <span style={{ fontSize:20 }}>🚧</span>
+                        <span style={{ fontSize:13, color:'#9ca3af', fontWeight:'500' }}>Coming Soon — this section is under development</span>
+                      </div>
+                    </div>
+                  ))}
                 </>)}
 
               </div>
@@ -1195,78 +1572,137 @@ const M = {
 
 // ── STUDENT HUB STYLES ──
 const SD = {
+  // Layout
   shell:{ display:'flex', height:'100%', backgroundColor:'#f9fafb', overflow:'hidden' },
-  sidebar:{ width:220, flexShrink:0, backgroundColor:'white', borderRight:'1px solid #e5e7eb', display:'flex', flexDirection:'column', padding:'20px 0', overflowY:'auto' },
-  sidebarLogo:{ fontSize:'20px', fontWeight:'900', color:'#4F46E5', padding:'0 20px 24px', letterSpacing:'-0.5px' },
-  navItem:{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 20px', border:'none', background:'none', fontSize:'14px', cursor:'pointer', width:'100%', textAlign:'left', transition:'all 0.15s', borderRadius:0 },
-  navIcon:{ fontSize:'16px', width:20, textAlign:'center' },
+  sidebar:{ flexShrink:0, backgroundColor:'white', borderRight:'1px solid #e5e7eb', display:'flex', flexDirection:'column', padding:'16px 0', overflowY:'auto', overflowX:'hidden' },
+  // Sidebar logo row + collapse
+  logoRow:{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'0 12px 20px', gap:6 },
+  logoText:{ display:'flex', alignItems:'center', gap:8, fontSize:'17px', fontWeight:'900', color:'#4F46E5', letterSpacing:'-0.5px', whiteSpace:'nowrap', overflow:'hidden' },
+  toggleBtn:{ width:26, height:26, border:'none', background:'#f3f4f6', borderRadius:'6px', cursor:'pointer', fontSize:'11px', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, color:'#6b7280' },
+  navItem:{ display:'flex', alignItems:'center', gap:'10px', padding:'10px 16px', border:'none', background:'none', fontSize:'13px', cursor:'pointer', width:'100%', textAlign:'left', transition:'all 0.15s', borderRadius:0, whiteSpace:'nowrap', overflow:'hidden' },
+  navIcon:{ fontSize:'16px', width:20, textAlign:'center', flexShrink:0 },
   sidebarSpacer:{ flex:1 },
-  sidebarUser:{ display:'flex', alignItems:'center', gap:'10px', padding:'12px 20px', borderTop:'1px solid #e5e7eb' },
-  userAvatar:{ width:36, height:36, borderRadius:'50%', backgroundColor:'#EEF2FF', color:'#4F46E5', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'16px', fontWeight:'700', flexShrink:0 },
+  sidebarUser:{ display:'flex', alignItems:'center', gap:'10px', padding:'12px 16px', borderTop:'1px solid #e5e7eb' },
+  userAvatar:{ width:34, height:34, borderRadius:'50%', backgroundColor:'#EEF2FF', color:'#4F46E5', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'14px', fontWeight:'700', flexShrink:0 },
   userName:{ fontSize:'13px', fontWeight:'700', color:'#111827' },
   userRole:{ fontSize:'11px', color:'#9ca3af' },
-  logoutBtn:{ margin:'8px 12px 12px', padding:'9px', border:'1.5px solid #e5e7eb', borderRadius:'8px', background:'white', fontSize:'13px', fontWeight:'600', color:'#6b7280', cursor:'pointer' },
-  main:{ flex:1, overflowY:'auto', padding:'28px' },
-  topBar:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px' },
+  logoutBtn:{ margin:'6px 10px 10px', padding:'9px 12px', border:'1px solid #FECACA', borderRadius:'8px', background:'#FEF2F2', fontSize:'12px', fontWeight:'700', color:'#DC2626', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6, whiteSpace:'nowrap', overflow:'hidden' },
+  main:{ flex:1, overflowY:'auto', padding:'28px', minWidth:0 },
+  topBar:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'20px', flexWrap:'wrap', gap:8 },
   pageTitle:{ fontSize:'24px', fontWeight:'800', color:'#111827', margin:0 },
-  pageSubtitle:{ fontSize:'14px', color:'#6b7280', marginTop:'4px' },
-  statsRow:{ display:'flex', gap:'16px', marginBottom:'24px' },
-  statCard:{ flex:1, backgroundColor:'white', borderRadius:'12px', padding:'16px 20px', border:'1px solid #e5e7eb', display:'flex', alignItems:'center', gap:'14px' },
-  statIcon:{ fontSize:'28px' },
-  statLabel:{ fontSize:'10px', fontWeight:'700', color:'#9ca3af', letterSpacing:'1px' },
-  statValue:{ fontSize:'26px', fontWeight:'800', color:'#111827' },
-  contentRow:{ display:'flex', gap:'24px', alignItems:'flex-start' },
+  pageSubtitle:{ fontSize:'13px', color:'#6b7280', marginTop:'4px' },
+  refreshBtn:{ padding:'7px 14px', fontSize:'12px', fontWeight:'600', border:'1.5px solid #e5e7eb', borderRadius:'7px', background:'white', color:'#374151', cursor:'pointer' },
+
+  // 4 stat cards
+  statsRow:{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'12px', marginBottom:'20px' },
+  statCard:{ backgroundColor:'white', borderRadius:'12px', padding:'14px 16px', border:'1px solid #e5e7eb', display:'flex', alignItems:'center', gap:'12px', boxShadow:'0 1px 3px rgba(0,0,0,0.04)' },
+  statIconBox:{ width:40, height:40, borderRadius:'10px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'18px', flexShrink:0 },
+  statLabel:{ fontSize:'10px', fontWeight:'700', color:'#9ca3af', letterSpacing:'0.8px', marginBottom:'2px' },
+  statValue:{ fontSize:'22px', fontWeight:'800' },
+
+  // Active session banner
+  activeBanner:{ display:'flex', alignItems:'center', justifyContent:'space-between', backgroundColor:'#EEF2FF', border:'1.5px solid #c7d2fe', borderRadius:'12px', padding:'14px 20px', marginBottom:'20px', gap:12 },
+  activeBannerLeft:{ display:'flex', alignItems:'center', gap:12 },
+  activePulse:{ width:10, height:10, borderRadius:'50%', backgroundColor:'#10B981', display:'inline-block', boxShadow:'0 0 0 3px rgba(16,185,129,0.2)', animation:'pulse 2s infinite', flexShrink:0 },
+  activeBannerTitle:{ fontSize:'14px', fontWeight:'700', color:'#3730a3' },
+  activeBannerSub:{ fontSize:'12px', color:'#6366f1', marginTop:2 },
+  activeBannerBtn:{ padding:'8px 18px', backgroundColor:'#4F46E5', color:'white', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:'700', cursor:'pointer', flexShrink:0 },
+
+  // Content layout
+  contentRow:{ display:'flex', gap:'20px', alignItems:'flex-start' },
   mainCol:{ flex:1, minWidth:0 },
-  joinCard:{ backgroundColor:'white', borderRadius:'12px', padding:'24px', border:'1px solid #e5e7eb', marginBottom:'24px', boxShadow:'0 1px 4px rgba(0,0,0,0.05)' },
-  joinCardTitle:{ fontSize:'16px', fontWeight:'700', color:'#111827', marginBottom:'8px', display:'flex', alignItems:'center', justifyContent:'space-between' },
-  joinCardDesc:{ fontSize:'13px', color:'#6b7280', marginBottom:'16px' },
-  pinInput:{ width:'100%', padding:'12px 14px', fontSize:'16px', border:'1.5px solid #e5e7eb', borderRadius:'8px', outline:'none', marginBottom:'10px', boxSizing:'border-box', color:'#111827', letterSpacing:'3px' },
-  joinSessionBtn:{ width:'100%', padding:'12px', backgroundColor:'white', color:'#374151', border:'1.5px solid #e5e7eb', borderRadius:'8px', fontSize:'14px', fontWeight:'600', cursor:'pointer' },
+  rightCol:{ width:240, flexShrink:0 },
+
+  // Join card — compact card, not full-width
+  joinCard:{ backgroundColor:'white', borderRadius:'14px', padding:'20px 22px', border:'1.5px solid #e5e7eb', marginBottom:'20px', boxShadow:'0 2px 8px rgba(99,102,241,0.07)', maxWidth:'360px' },
+  joinCardTitle:{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'5px' },
+  joinCardDesc:{ fontSize:'11px', color:'#9ca3af', marginBottom:'14px' },
+  pinInput:{ width:'100%', padding:'12px 14px', fontSize:'20px', border:'1.5px solid #e5e7eb', borderRadius:'8px', outline:'none', marginBottom:'10px', boxSizing:'border-box', color:'#111827', letterSpacing:'8px', textAlign:'center', fontWeight:'800' },
+  joinSessionBtn:{ width:'100%', padding:'11px', borderRadius:'8px', fontSize:'13px', fontWeight:'700', cursor:'pointer', transition:'all 0.15s' },
+
+  // My classes
   sectionBar:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px' },
   sectionTitle:{ fontSize:'16px', fontWeight:'700', color:'#111827' },
   viewAllBtn:{ background:'none', border:'none', color:'#4F46E5', fontSize:'13px', fontWeight:'600', cursor:'pointer' },
-  classGrid:{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:'12px', marginBottom:'24px' },
-  classCard:{ backgroundColor:'white', borderRadius:'12px', padding:'16px', border:'1px solid #e5e7eb', boxShadow:'0 1px 4px rgba(0,0,0,0.04)' },
-  classBadgeActive:{ display:'inline-block', fontSize:'10px', fontWeight:'700', color:'white', backgroundColor:'#10B981', padding:'3px 8px', borderRadius:'4px', marginBottom:'10px', letterSpacing:'0.5px' },
-  classBadgeDone:{ display:'inline-block', fontSize:'10px', fontWeight:'700', color:'#6b7280', backgroundColor:'#f3f4f6', padding:'3px 8px', borderRadius:'4px', marginBottom:'10px', letterSpacing:'0.5px' },
-  className:{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'4px' },
-  classTeacher:{ fontSize:'12px', color:'#6b7280', marginBottom:'12px' },
+  classGrid:{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:'12px', marginBottom:'20px' },
+  classCard:{ backgroundColor:'white', borderRadius:'12px', padding:'14px', border:'1px solid #e5e7eb', boxShadow:'0 1px 3px rgba(0,0,0,0.04)' },
+  classBadgeActive:{ display:'inline-block', fontSize:'10px', fontWeight:'700', color:'white', backgroundColor:'#10B981', padding:'3px 8px', borderRadius:'20px', marginBottom:'10px', letterSpacing:'0.3px' },
+  classBadgeDone:{ display:'inline-block', fontSize:'10px', fontWeight:'700', color:'#6b7280', backgroundColor:'#f3f4f6', padding:'3px 8px', borderRadius:'20px', marginBottom:'10px' },
+  className:{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'3px' },
+  classTeacher:{ fontSize:'12px', color:'#6b7280', marginBottom:'10px' },
   enterClassBtn:{ width:'100%', padding:'8px', backgroundColor:'#EEF2FF', color:'#4F46E5', border:'none', borderRadius:'6px', fontSize:'12px', fontWeight:'700', cursor:'pointer' },
-  rightCol:{ width:260, flexShrink:0 },
-  sessionListCard:{ backgroundColor:'white', borderRadius:'12px', padding:'16px', border:'1px solid #e5e7eb' },
-  sessionListHeader:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px' },
-  sessionListTitle:{ fontSize:'14px', fontWeight:'700', color:'#111827' },
-  sessionListBadge:{ fontSize:'11px', fontWeight:'700', color:'white', backgroundColor:'#4F46E5', padding:'3px 10px', borderRadius:'20px' },
-  sessionListItem:{ display:'flex', alignItems:'center', gap:'10px', padding:'9px 0', borderBottom:'1px solid #f3f4f6' },
-  sessionListIcon:{ fontSize:'18px', flexShrink:0 },
-  sessionListInfo:{ flex:1 },
-  sessionListName:{ fontSize:'13px', fontWeight:'600', color:'#111827' },
-  sessionListSub:{ fontSize:'11px', color:'#6b7280' },
-  sessionListStatus:{ fontSize:'11px', fontWeight:'600' },
-  emptyState:{ textAlign:'center', padding:'60px 20px', backgroundColor:'white', borderRadius:'12px', border:'1px solid #e5e7eb' },
-  emptyIcon:{ fontSize:'48px', marginBottom:'12px' },
-  emptyTitle:{ fontSize:'18px', fontWeight:'700', color:'#374151', marginBottom:'8px' },
-  emptyText:{ fontSize:'14px', color:'#6b7280' },
-  sessionGrid:{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))', gap:'16px' },
-  liveSessionCard:{ backgroundColor:'white', borderRadius:'12px', padding:'20px', border:'1px solid #e5e7eb', boxShadow:'0 1px 4px rgba(0,0,0,0.05)' },
-  liveCardBadge:{ fontSize:'12px', fontWeight:'700', color:'#DC2626', backgroundColor:'#FEE2E2', padding:'4px 10px', borderRadius:'20px', display:'inline-block', marginBottom:'12px' },
-  liveCardName:{ fontSize:'16px', fontWeight:'700', color:'#111827', marginBottom:'4px' },
-  liveCardTeacher:{ fontSize:'13px', color:'#6b7280', marginBottom:'12px' },
-  liveCardStats:{ display:'flex', justifyContent:'space-between', fontSize:'12px', color:'#6b7280', marginBottom:'14px' },
+
+  // Session list (right column)
+  sessionListCard:{ backgroundColor:'white', borderRadius:'12px', padding:'14px', border:'1px solid #e5e7eb' },
+  sessionListHeader:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'10px' },
+  sessionListTitle:{ fontSize:'13px', fontWeight:'700', color:'#111827' },
+  sessionListBadge:{ fontSize:'11px', fontWeight:'700', color:'white', backgroundColor:'#4F46E5', padding:'2px 8px', borderRadius:'20px' },
+  sessionListItem:{ display:'flex', alignItems:'center', gap:'8px', padding:'8px 0', borderBottom:'1px solid #f3f4f6' },
+  sessionListDot:{ width:8, height:8, borderRadius:'50%', flexShrink:0 },
+  sessionListInfo:{ flex:1, minWidth:0 },
+  sessionListName:{ fontSize:'12px', fontWeight:'600', color:'#111827', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' },
+  sessionListSub:{ fontSize:'10px', color:'#9ca3af' },
+
+  // Empty state
+  emptyState:{ textAlign:'center', padding:'48px 20px', backgroundColor:'white', borderRadius:'12px', border:'1px solid #e5e7eb' },
+  emptyIcon:{ fontSize:'48px', marginBottom:'10px' },
+  emptyTitle:{ fontSize:'18px', fontWeight:'700', color:'#374151', marginBottom:'6px' },
+  emptyText:{ fontSize:'13px', color:'#6b7280' },
+
+  // Live session cards
+  sessionGrid:{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))', gap:'14px' },
+  liveSessionCard:{ backgroundColor:'white', borderRadius:'12px', padding:'18px', border:'1.5px solid #e5e7eb', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' },
+  liveCardHeader:{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'12px' },
+  liveCardBadge:{ fontSize:'11px', fontWeight:'700', color:'#DC2626', backgroundColor:'#FEE2E2', padding:'4px 10px', borderRadius:'20px', display:'flex', alignItems:'center', gap:5 },
+  liveDot:{ width:6, height:6, borderRadius:'50%', backgroundColor:'#DC2626', display:'inline-block' },
+  liveCardName:{ fontSize:'16px', fontWeight:'800', color:'#111827', marginBottom:'6px' },
+  liveCardTeacher:{ display:'flex', alignItems:'center', gap:8, fontSize:'13px', color:'#6b7280', marginBottom:'10px' },
+  teacherChip:{ width:22, height:22, borderRadius:'50%', backgroundColor:'#6366f1', color:'white', fontSize:'11px', fontWeight:'700', display:'inline-flex', alignItems:'center', justifyContent:'center', flexShrink:0 },
+  liveCardMeta:{ display:'flex', justifyContent:'space-between', fontSize:'11px', color:'#6b7280', marginBottom:'14px' },
   enterBtn:{ width:'100%', padding:'10px', backgroundColor:'#4F46E5', color:'white', border:'none', borderRadius:'8px', fontSize:'13px', fontWeight:'700', cursor:'pointer' },
-  onlineBadge:{ fontSize:'12px', fontWeight:'700', color:'#10B981', backgroundColor:'#D1FAE5', padding:'4px 10px', borderRadius:'20px' },
-  participantGrid:{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))', gap:'12px' },
-  participantCard:{ backgroundColor:'white', borderRadius:'12px', padding:'16px', border:'1px solid #e5e7eb', textAlign:'center' },
-  participantAvatar:{ width:48, height:48, borderRadius:'50%', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'20px', fontWeight:'700', margin:'0 auto 10px' },
-  participantName:{ fontSize:'13px', fontWeight:'600', color:'#111827', marginBottom:'4px' },
-  participantOnline:{ fontSize:'11px', color:'#10B981', fontWeight:'600' },
-  profileCard:{ backgroundColor:'white', borderRadius:'12px', padding:'28px', border:'1px solid #e5e7eb', maxWidth:480 },
-  profileField:{ marginBottom:'16px' },
-  profileLabel:{ fontSize:'13px', fontWeight:'700', color:'#374151', marginBottom:'6px', display:'block' },
+
+  // Participants
+  onlineBadge:{ fontSize:'12px', fontWeight:'700', color:'#10B981', backgroundColor:'#D1FAE5', padding:'3px 10px', borderRadius:'20px' },
+  participantListWrap:{ backgroundColor:'white', borderRadius:'12px', border:'1px solid #e5e7eb', overflow:'hidden' },
+  participantRow:{ display:'flex', alignItems:'center', gap:'14px', padding:'12px 16px', borderBottom:'1px solid #f3f4f6' },
+  participantAvatarSm:{ width:40, height:40, borderRadius:'50%', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'16px', fontWeight:'700', flexShrink:0 },
+  participantInfo:{ flex:1 },
+  participantNameText:{ fontSize:'14px', fontWeight:'600', color:'#111827' },
+  roleTeacher:{ fontSize:'11px', fontWeight:'600', color:'#92400e', backgroundColor:'#fef3c7', display:'inline-block', padding:'2px 7px', borderRadius:'4px', marginTop:3 },
+  roleStudent:{ fontSize:'11px', fontWeight:'600', color:'#1d4ed8', backgroundColor:'#dbeafe', display:'inline-block', padding:'2px 7px', borderRadius:'4px', marginTop:3 },
+  onlineIndicator:{ display:'flex', alignItems:'center', gap:5, fontSize:'11px', fontWeight:'600', color:'#10B981', flexShrink:0 },
+  onlineDotGreen:{ width:7, height:7, borderRadius:'50%', backgroundColor:'#10B981', display:'inline-block' },
+
+  // Quiz grid
+  quizGrid:{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(190px,1fr))', gap:'14px' },
+  quizCard:{ backgroundColor:'white', borderRadius:'12px', padding:'16px', border:'1px solid #e5e7eb', boxShadow:'0 1px 3px rgba(0,0,0,0.04)' },
+  quizBadge:{ display:'inline-block', fontSize:'10px', fontWeight:'700', padding:'3px 8px', borderRadius:'4px', marginBottom:'10px' },
+  quizTitle:{ fontSize:'14px', fontWeight:'700', color:'#111827', marginBottom:'4px' },
+  quizMeta:{ fontSize:'11px', color:'#6b7280' },
+  quizScore:{ fontSize:'16px', fontWeight:'800', color:'#10B981', marginTop:8 },
+
+  // Session list table
+  tableWrap:{ backgroundColor:'white', borderRadius:'12px', border:'1px solid #e5e7eb', overflow:'hidden' },
+  tableHeader:{ display:'flex', alignItems:'center', padding:'10px 16px', backgroundColor:'#f9fafb', borderBottom:'1px solid #e5e7eb', fontSize:'10px', fontWeight:'700', color:'#9ca3af', letterSpacing:'0.5px', gap:8 },
+  tableRow:{ display:'flex', alignItems:'center', padding:'12px 16px', borderBottom:'1px solid #f3f4f6', gap:8 },
+
+  // Settings
+  settingsCard:{ backgroundColor:'white', borderRadius:'12px', border:'1px solid #e5e7eb', overflow:'hidden', marginBottom:'0' },
+  settingsCardHeader:{ display:'flex', alignItems:'center', gap:'14px', padding:'16px 20px', borderBottom:'1px solid #f3f4f6', backgroundColor:'#fafafa' },
+  settingsCardIcon:{ fontSize:'22px', width:36, height:36, backgroundColor:'#EEF2FF', borderRadius:'8px', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 },
+  settingsCardTitle:{ fontSize:'15px', fontWeight:'700', color:'#111827' },
+  settingsCardSub:{ fontSize:'12px', color:'#9ca3af', marginTop:2 },
+  settingsCardBody:{ padding:'20px' },
+  settingsAvatarRow:{ display:'flex', alignItems:'center', gap:'14px', marginBottom:'20px', padding:'14px', backgroundColor:'#f9fafb', borderRadius:'10px', border:'1px solid #f3f4f6' },
+  settingsAvatarBig:{ width:52, height:52, borderRadius:'50%', backgroundColor:'#6366f1', color:'white', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'22px', fontWeight:'700', flexShrink:0 },
+
+  // Shared form
+  profileField:{ marginBottom:'14px' },
+  profileLabel:{ fontSize:'12px', fontWeight:'700', color:'#374151', marginBottom:'5px', display:'block', textTransform:'uppercase', letterSpacing:'0.5px' },
   profileInput:{ width:'100%', padding:'10px 13px', fontSize:'14px', border:'1.5px solid #e2e8f0', borderRadius:'8px', outline:'none', color:'#1e293b', boxSizing:'border-box' },
   profileInputReadonly:{ backgroundColor:'#f8fafc', color:'#94a3b8', cursor:'not-allowed' },
-  profileSaveBtn:{ padding:'12px 28px', backgroundColor:'#4F46E5', color:'white', border:'none', borderRadius:'8px', fontSize:'14px', fontWeight:'700', cursor:'pointer' },
-  profileMsg:{ marginTop:12, fontSize:13, fontWeight:'500', padding:'8px 12px', borderRadius:'6px', border:'1px solid transparent' },
+  profileSaveBtn:{ padding:'10px 24px', backgroundColor:'#4F46E5', color:'white', border:'none', borderRadius:'8px', fontSize:'14px', fontWeight:'700', cursor:'pointer' },
+  profileMsg:{ marginTop:10, fontSize:13, fontWeight:'500', padding:'8px 12px', borderRadius:'6px', border:'1px solid transparent' },
 };
 
 export default App;

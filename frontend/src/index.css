@@ -25,6 +25,7 @@ code {
 html, body, #root {
   min-height: 100%;
 }
+
 #root {
   overflow-y: auto;
 }

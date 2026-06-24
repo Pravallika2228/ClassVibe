@@ -38,8 +38,8 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
      window.scrollTo(0, 0);
     const urlParams  = new URLSearchParams(window.location.search);
     const pinFromUrl = urlParams.get('pin');
-    // ✅ CHANGED: accept 4–6 digit PIN from URL
-    if (pinFromUrl && /^\d{4,6}$/.test(pinFromUrl)) {
+    // ✅ CHANGED: accept 6-digit PIN from URL
+    if (pinFromUrl && /^\d{6}$/.test(pinFromUrl)) {
       setPin(pinFromUrl);
       setShowPinForm(true);
       setMessageType("success");
@@ -57,11 +57,11 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
       const url = new URL(raw);
       const p = url.searchParams.get("pin");
       // ✅ CHANGED: 4–6 digits
-      if (p && /^\d{4,6}$/.test(p)) return p;
+      if (p && /^\d{6}$/.test(p)) return p;
     } catch {}
     const digits = (raw.match(/\d+/g) || []).join("");
-    if (digits.length >= 4) return digits.slice(0, 6);
-    const m = raw.match(/\d{4,6}/);
+    if (digits.length === 6) return digits;
+    const m = raw.match(/\d{6}/);
     return m ? m[0] : "";
   };
 
@@ -72,8 +72,8 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
     const p = (pin || "").trim();
 
     if (!name.trim())          { setMessage("Please enter your nickname"); setMessageType("error"); return; }
-    // ✅ CHANGED: accept 4–6 digit PIN
-    if (!/^\d{4,6}$/.test(p)) { setMessage("Please enter a valid 4–6 digit PIN"); setMessageType("error"); return; }
+    // ✅ CHANGED: accept 6-digit PIN
+    if (!/^\d{6}$/.test(p)) { setMessage("Please enter a valid 6-digit PIN"); setMessageType("error"); return; }
     if (!email.trim())         { setMessage("Please enter your email address"); setMessageType("error"); return; }
     if (!isValidEmail(email.trim())) { setMessage("Please enter a valid email address"); setMessageType("error"); return; }
     // password is optional — only required if the session is private (backend will reject if wrong)
@@ -143,7 +143,7 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
           const raw       = codes[0].rawValue ?? codes[0].rawData ?? "";
           const parsedPin = parsePinFromQr(raw);
           stopCameraScan();
-          if (parsedPin && /^\d{4,6}$/.test(parsedPin)) {
+          if (parsedPin && /^\d{6}$/.test(parsedPin)) {
             setPin(parsedPin); setShowPinForm(true); setMessageType("success");
             setMessage("QR scanned! Fill in your details to join.");
           } else {
@@ -225,7 +225,7 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
                 <input
                   value={pin}
                   onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  placeholder="4–6 digit PIN"
+                  placeholder="6-digit PIN"
                   inputMode="numeric"
                   maxLength={6}
                   autoComplete="off"

@@ -25,8 +25,8 @@ body {
   line-height: 1.5;
 }
 
-/* ===== HEADER ===== */
-header {
+/* ===== HEADER — scoped to .home only, does not affect Header.js ===== */
+.home header {
   position: fixed;
   top: 16px;
   left: 50%;
@@ -53,7 +53,7 @@ header {
   padding: 18px 32px;
 }
 
-header h2 {
+.home header h2 {
   font-size: 18px;
   font-weight: 800;
   color: var(--text-color);
@@ -522,7 +522,7 @@ h1 {
   h1 { font-size: 32px; font-family: 'Archivo';}
   .hero-text h2 { font-size: 36px; }
   main { padding-top: 70px; }
-  header h2 { font-size: 18px; }
+  .home header h2 { font-size: 18px; }
   .mid { font-size: 28px; }
   .subtitle h2 { font-size: 28px; }
 }

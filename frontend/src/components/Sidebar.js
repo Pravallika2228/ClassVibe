@@ -18,7 +18,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 // ─── inline Settings component ──────────────────────────────────────────────
-const Settings = ({ onClose }) => {
+const Settings = ({ onClose, onUserUpdated }) => {
   const [user,         setUser]         = useState(null);
   const [username,     setUsername]     = useState('');
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -60,10 +60,12 @@ const Settings = ({ onClose }) => {
       const updated = { ...user, username: username.trim(), name: username.trim(), profilePhoto: photoPreview };
       localStorage.setItem('user', JSON.stringify(updated));
       setUser(updated);
+      if (typeof onUserUpdated === 'function') onUserUpdated(updated);
       setMsg(res.ok ? '✅ Profile updated!' : '✅ Saved locally (will sync when server available)');
     } catch {
       const updated = { ...user, username: username.trim(), name: username.trim(), profilePhoto: photoPreview };
       localStorage.setItem('user', JSON.stringify(updated));
+      if (typeof onUserUpdated === 'function') onUserUpdated(updated);
       setMsg('✅ Saved locally');
     } finally { setSaving(false); }
   };
@@ -370,9 +372,10 @@ const Sidebar = ({
   currentUserId,
   userRole,
   onLeaveMeeting,
-  // ── new optional navigation callbacks ──
-  onDashboard,    // called when teacher/student clicks "Dashboard" nav
-  onLiveSession,  // called when teacher/student clicks "Live Session" nav
+  onLogout,
+  onDashboard,
+  onLiveSession,
+  onUserUpdated,  // called with updated user object after profile save
 }) => {
   const [expandedSection,  setExpandedSection]  = useState(null);
   const [error,            setError]            = useState('');
@@ -394,13 +397,7 @@ const Sidebar = ({
     return String(adminId) === String(userId);
   })();
 
-  // Auto-expand rejoin if PIN is in URL
-  useEffect(() => {
-    const pin = new URLSearchParams(window.location.search).get('pin');
-    if (pin) setExpandedSection('rejoin');
-  }, []);
-
-  // Message counts per sender
+  // Message counts per sender (teacher only usage)
   const messageCounts = (() => {
     const counts = {};
     messages.forEach(m => { if (m.sender?._id) counts[m.sender._id] = (counts[m.sender._id] || 0) + 1; });
@@ -417,20 +414,21 @@ const Sidebar = ({
     if (!qr) return;
     const w = window.open(); w.document.write(`<img src="${qr}" style="max-width:100%"/>`); w.document.title = 'QR Code';
   };
-  const openStudentJoinWithPin = (pin) => {
-    if (!pin) return;
-    window.location.href = `${window.location.origin}${window.location.pathname}?pin=${encodeURIComponent(pin)}`;
-  };
 
-  // Engagement
+  // Engagement (teacher)
   const engagementScore = (() => {
     if (!group?.members?.length || !messages?.length) return 0;
     const senders = new Set(messages.map(m => m.sender?._id).filter(Boolean));
     return Math.min(100, Math.round((senders.size / group.members.length) * 100));
   })();
 
-  const onlineCount = group?.onlineUsers?.length || 0;
-  const memberCount = group?.members?.length     || 0;
+  // Only currently connected users (cross-reference members with onlineUsers)
+  const onlineIds = new Set((group?.onlineUsers || []).map(u => String(u._id || u.id || u)));
+  const onlineMembers = (group?.members || []).filter(m => {
+    const mId = String(m.user?._id || m.user?.id || m._id || m.id || '');
+    return mId && onlineIds.has(mId);
+  });
+  const onlineCount = onlineMembers.length;
 
   // ── Nav handlers ──
   const handleNavClick = (label) => {
@@ -439,12 +437,12 @@ const Sidebar = ({
       if (typeof onDashboard === 'function') { onDashboard(); onClose(); }
     } else if (label === 'Live Session') {
       if (typeof onLiveSession === 'function') { onLiveSession(); onClose(); }
-    } else if (label === 'Settings') {
+    } else if (label === 'Settings' || label === 'Profile') {
       setShowSettings(true);
     } else if (label === 'Whiteboard') {
       setShowWhiteboard(true);
     }
-    // 'Participants' just sets active — scrolls to the section below
+    // 'Participants' sets active and shows the panel below
   };
 
   const teacherNav = [
@@ -465,223 +463,225 @@ const Sidebar = ({
   // ════════════════════════════════════════════════════════════════════════
   return (
     <>
-      {/* Overlays */}
-      {showSettings   && <Settings   onClose={() => setShowSettings(false)}   />}
+      {showSettings   && <Settings   onClose={() => setShowSettings(false)} onUserUpdated={onUserUpdated} />}
       {showWhiteboard && <Whiteboard onClose={() => setShowWhiteboard(false)} />}
 
       {isOpen && <div style={styles.backdrop} onClick={onClose} />}
-      <div style={{ ...styles.sidebar, right: isOpen ? '0' : '-400px' }}>
+      <div style={{ ...styles.sidebar, right: isOpen ? '0' : '-100vw' }}>
 
-        {/* ── HEADER — ClassVibe brand removed, just close button ── */}
+        {/* ── HEADER ── */}
         <div style={styles.sidebarHeader}>
           <span style={styles.headerLabel}>Menu</span>
           <button onClick={onClose} style={styles.closeButton}>✕</button>
         </div>
 
-        {/* ══ SESSION PANEL (only when in a session) ══ */}
-        {group && (
-          <>
-            {/* NAV ITEMS */}
-            <div style={styles.navSection}>
-              {navItems.map((item, i) => (
-                <button
-                  key={i}
-                  style={{
-                    ...styles.navItem,
-                    backgroundColor: activeNavItem === item.label ? '#EEF2FF' : 'transparent',
-                    color:           activeNavItem === item.label ? '#4F46E5' : '#374151',
-                  }}
-                  onClick={() => handleNavClick(item.label)}
-                >
-                  <span style={styles.navIcon}>{item.icon}</span>
-                  <div style={styles.navTextWrap}>
-                    <span style={styles.navLabel}>{item.label}</span>
-                    {item.sub && <span style={styles.navSub}>{item.sub}</span>}
-                  </div>
-                  {activeNavItem === item.label && <span style={styles.navActive} />}
-                </button>
-              ))}
-            </div>
+        {/* ── SCROLLABLE BODY ── */}
+        <div style={styles.scrollContent}>
 
-            {/* ── PARTICIPANTS PANEL (single display — "Participation" section removed below) ── */}
-            <div style={styles.participantsPanel}>
-              <div style={styles.participantsHeader}>
-                <span style={styles.participantsTitle}>Participants ({memberCount})</span>
-                <span style={styles.onlinePill}>{onlineCount} Online</span>
-              </div>
-              <div style={styles.participantsList}>
-                {(group.members || []).slice(0, 8).map((member, i) => {
-                  const name     = member.user?.username ?? member.user?.name ?? member.username ?? member.name ?? `Member ${i + 1}`;
-                  const mId      = member.user?._id ?? member.user?.id ?? member._id ?? member.id;
-                  const isOnline = group.onlineUsers?.some(u => (u._id || u.id || u) === mId);
-                  const colors   = ['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#BB8FCE','#98D8C8','#F7DC6F','#85C1E2'];
-                  return (
-                    <div key={mId || i} style={styles.participantRow}>
-                      <div style={{ ...styles.participantAvatar, backgroundColor: colors[i % colors.length] }}>
-                        {name.charAt(0).toUpperCase()}
-                        {isOnline && <div style={styles.onlineDot} />}
-                      </div>
-                      <span style={styles.participantName}>{name}</span>
-                      {String(mId) === String(group.admin?._id ?? group.admin) && (
-                        <span style={styles.teacherTag}>Teacher</span>
-                      )}
+          {group && (
+            <>
+              {/* NAV ITEMS */}
+              <div style={styles.navSection}>
+                {navItems.map((item, i) => (
+                  <button
+                    key={i}
+                    style={{
+                      ...styles.navItem,
+                      backgroundColor: activeNavItem === item.label ? '#EEF2FF' : 'transparent',
+                      color:           activeNavItem === item.label ? '#4F46E5' : '#374151',
+                    }}
+                    onClick={() => handleNavClick(item.label)}
+                  >
+                    <span style={styles.navIcon}>{item.icon}</span>
+                    <div style={styles.navTextWrap}>
+                      <span style={styles.navLabel}>{item.label}</span>
+                      {item.sub && <span style={styles.navSub}>{item.sub}</span>}
                     </div>
-                  );
-                })}
-                {memberCount > 8 && <div style={styles.moreParticipants}>+{memberCount - 8} more</div>}
-                {memberCount === 0 && <p style={styles.noUsers}>No members yet</p>}
+                    {activeNavItem === item.label && <span style={styles.navActive} />}
+                  </button>
+                ))}
               </div>
-            </div>
 
-            {/* ── LIVE REACTIONS (teacher only) ── */}
-            {resolvedRole === 'teacher' && (
-              <div style={styles.engagementPanel}>
-                <div style={styles.engagementTitle}>LIVE REACTIONS</div>
-                <div style={styles.engagementContent}>
-                  <span style={styles.engagementIcon}>⚡</span>
-                  <div>
-                    <div style={styles.engagementScore}>{engagementScore}%</div>
-                    <div style={styles.engagementLabel}>Engagement</div>
+              {/* ── PARTICIPANTS — only when that nav item is active ── */}
+              {activeNavItem === 'Participants' && (
+                <div style={styles.participantsPanel}>
+                  <div style={styles.participantsHeader}>
+                    <span style={styles.participantsTitle}>
+                      Participants ({onlineCount} online)
+                    </span>
+                    <span style={styles.onlinePill}>{onlineCount} Online</span>
                   </div>
-                </div>
-                <div style={styles.engagementBar}>
-                  <div style={{ ...styles.engagementFill, width: `${engagementScore}%` }} />
-                </div>
-              </div>
-            )}
-
-            {/* ── SUPPORT (student only) ── */}
-            {resolvedRole === 'student' && (
-              <div style={styles.studentActionsPanel}>
-                <button style={styles.supportBtn} onClick={() => window.open('mailto:support@classvibe.app', '_blank')}>❓ Support</button>
-              </div>
-            )}
-
-            <div style={styles.divider} />
-          </>
-        )}
-
-        {/* ══ SESSION TOOLS ══ */}
-        <div style={styles.sectionsTitle}>Session Tools</div>
-
-        {/* Share PIN & QR (admin) / Rejoin (student) */}
-        <div style={styles.section}>
-          <div style={styles.sectionHeader} onClick={() => toggleSection('rejoin')}>
-            <span style={styles.sectionTitle}>🔗 {isAdmin ? 'Share PIN & QR' : 'Rejoin Section'}</span>
-            <span style={styles.arrow}>{expandedSection === 'rejoin' ? '▼' : '▶'}</span>
-          </div>
-          {expandedSection === 'rejoin' && (
-            <div style={styles.sectionContent}>
-              {group ? (
-                <>
-                  <p style={styles.description}>{isAdmin ? 'Share the classroom PIN / QR code with students.' : 'Use the PIN or QR below to rejoin.'}</p>
-                  <div style={styles.qrSection}>
-                    {group.qrCode ? (
-                      <>
-                        <img src={group.qrCode} alt="QR Code" style={styles.qrCode} />
-                        <div style={{ marginTop: 8, display:'flex', gap:6, justifyContent:'center', flexWrap:'wrap' }}>
-                          {isAdmin && <button style={styles.smallBtn} onClick={() => copyText(group.pin)}>Copy PIN</button>}
-                          <button style={styles.smallBtn} onClick={() => copyText(group.qrCode)}>Copy QR</button>
-                          <button style={styles.smallBtn} onClick={() => openQrInNewTab(group.qrCode)}>Open QR</button>
-                        </div>
-                      </>
-                    ) : <p style={{ color:'#94a3b8', textAlign:'center' }}>No QR code generated yet.</p>}
-                    <p style={styles.pinDisplay}>PIN: {group?.pin ?? '—'}</p>
-                    {!isAdmin && (
-                      <button style={styles.button} onClick={() => openStudentJoinWithPin(group?.pin)}>Join with PIN</button>
-                    )}
-                  </div>
-                </>
-              ) : <p style={styles.noUsers}>No session active</p>}
-              {error   && <div style={styles.errorText}>{error}</div>}
-              {success && <div style={styles.successText}>{success}</div>}
-            </div>
-          )}
-        </div>
-
-        {/* Active Students — teacher only */}
-        {resolvedRole === 'teacher' && (
-          <div style={styles.section}>
-            <div style={styles.sectionHeader} onClick={() => toggleSection('activeUsers')}>
-              <span style={styles.sectionTitle}>👤 Active Students</span>
-              <span style={styles.arrow}>{expandedSection === 'activeUsers' ? '▼' : '▶'}</span>
-            </div>
-            {expandedSection === 'activeUsers' && (
-              <div style={styles.sectionContent}>
-                {group?.onlineUsers?.length > 0 ? (
-                  <>
-                    <p style={styles.description}>Students who have sent at least one message</p>
-                    {(() => {
-                      const teacherId = group.admin?._id || group.admin?.id || group.admin;
-                      const active = group.onlineUsers.filter(u => {
-                        const uid = u._id || u.id;
-                        return String(uid) !== String(teacherId) && (messageCounts[uid] || 0) > 0;
-                      });
-                      if (!active.length) return <p style={styles.noUsers}>No active students yet.</p>;
+                  <div style={styles.participantsList}>
+                    {onlineMembers.map((member, i) => {
+                      const name   = member.user?.username ?? member.user?.name ?? member.username ?? member.name ?? `Member ${i + 1}`;
+                      const mId    = member.user?._id ?? member.user?.id ?? member._id ?? member.id;
+                      const colors = ['#FF6B6B','#4ECDC4','#45B7D1','#FFA07A','#BB8FCE','#98D8C8','#F7DC6F','#85C1E2'];
                       return (
-                        <div style={styles.activeUsersList}>
-                          {active.map(u => {
-                            const uid  = u._id || u.id;
-                            const name = u.username || u.name || 'Unknown';
-                            const cnt  = messageCounts[uid] || 0;
-                            return (
-                              <div key={uid} style={styles.activeUserItem}>
-                                <div style={styles.activeUserLeft}>
-                                  <div style={styles.activeStatusDot} />
-                                  <span style={styles.activeUserName}>{name}</span>
-                                </div>
-                                <span style={styles.messageCount}>{cnt} {cnt === 1 ? 'msg' : 'msgs'}</span>
-                              </div>
-                            );
-                          })}
+                        <div key={mId || i} style={styles.participantRow}>
+                          <div style={{ ...styles.participantAvatar, backgroundColor: colors[i % colors.length] }}>
+                            {name.charAt(0).toUpperCase()}
+                            <div style={styles.onlineDot} />
+                          </div>
+                          <span style={styles.participantName}>{name}</span>
+                          {String(mId) === String(group.admin?._id ?? group.admin) && (
+                            <span style={styles.teacherTag}>Teacher</span>
+                          )}
                         </div>
                       );
-                    })()}
-                  </>
-                ) : <p style={styles.noUsers}>No users online</p>}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Statistics — teacher only */}
-        {resolvedRole === 'teacher' && (
-          <div style={styles.section}>
-            <div style={styles.sectionHeader} onClick={() => toggleSection('stats')}>
-              <span style={styles.sectionTitle}>📊 Statistics</span>
-              <span style={styles.arrow}>{expandedSection === 'stats' ? '▼' : '▶'}</span>
-            </div>
-            {expandedSection === 'stats' && (
-              <div style={styles.sectionContent}>
-                {[
-                  { label: 'Total Messages:', value: messages?.length || 0 },
-                  { label: 'Online Members:', value: group?.onlineUsers?.length || 0 },
-                  { label: 'Total Members:',  value: group?.members?.length || 0 },
-                ].map((s, i) => (
-                  <div key={i} style={styles.statItem}>
-                    <span style={styles.statLabel}>{s.label}</span>
-                    <span style={styles.statValue}>{s.value}</span>
+                    })}
+                    {onlineCount === 0 && (
+                      <p style={styles.noUsers}>No one online right now</p>
+                    )}
                   </div>
-                ))}
-                {group?.createdAt && (
-                  <div style={styles.statItem}>
-                    <span style={styles.statLabel}>Session Started:</span>
-                    <span style={styles.statValue}>{new Date(group.createdAt).toLocaleDateString()}</span>
+                </div>
+              )}
+
+              {/* ── LIVE REACTIONS — teacher only ── */}
+              {resolvedRole === 'teacher' && (
+                <div style={styles.engagementPanel}>
+                  <div style={styles.engagementTitle}>LIVE REACTIONS</div>
+                  <div style={styles.engagementContent}>
+                    <span style={styles.engagementIcon}>⚡</span>
+                    <div>
+                      <div style={styles.engagementScore}>{engagementScore}%</div>
+                      <div style={styles.engagementLabel}>Engagement</div>
+                    </div>
+                  </div>
+                  <div style={styles.engagementBar}>
+                    <div style={{ ...styles.engagementFill, width: `${engagementScore}%` }} />
+                  </div>
+                </div>
+              )}
+
+              {resolvedRole === 'teacher' && <div style={styles.divider} />}
+            </>
+          )}
+
+          {/* ── SESSION TOOLS — teacher only ── */}
+          {resolvedRole === 'teacher' && (
+            <>
+              <div style={styles.sectionsTitle}>Session Tools</div>
+
+              {/* Share PIN & QR */}
+              <div style={styles.section}>
+                <div style={styles.sectionHeader} onClick={() => toggleSection('rejoin')}>
+                  <span style={styles.sectionTitle}>🔗 {isAdmin ? 'Share PIN & QR' : 'Session PIN'}</span>
+                  <span style={styles.arrow}>{expandedSection === 'rejoin' ? '▼' : '▶'}</span>
+                </div>
+                {expandedSection === 'rejoin' && (
+                  <div style={styles.sectionContent}>
+                    {group ? (
+                      <>
+                        <p style={styles.description}>Share the classroom PIN / QR code with students.</p>
+                        <div style={styles.qrSection}>
+                          {group.qrCode ? (
+                            <>
+                              <img src={group.qrCode} alt="QR Code" style={styles.qrCode} />
+                              <div style={{ marginTop: 8, display:'flex', gap:6, justifyContent:'center', flexWrap:'wrap' }}>
+                                <button style={styles.smallBtn} onClick={() => copyText(group.pin)}>Copy PIN</button>
+                                <button style={styles.smallBtn} onClick={() => copyText(group.qrCode)}>Copy QR</button>
+                                <button style={styles.smallBtn} onClick={() => openQrInNewTab(group.qrCode)}>Open QR</button>
+                              </div>
+                            </>
+                          ) : <p style={{ color:'#94a3b8', textAlign:'center' }}>No QR code generated yet.</p>}
+                          <p style={styles.pinDisplay}>PIN: {group?.pin ?? '—'}</p>
+                        </div>
+                      </>
+                    ) : <p style={styles.noUsers}>No session active</p>}
+                    {error   && <div style={styles.errorText}>{error}</div>}
+                    {success && <div style={styles.successText}>{success}</div>}
                   </div>
                 )}
               </div>
-            )}
-          </div>
-        )}
 
-        {/* Leave session — student only, bottom */}
-        {group && resolvedRole === 'student' && (
-          <div style={{ padding:'12px 20px', marginTop:'auto', borderTop:'1px solid #f3f4f6' }}>
-            <button style={styles.leaveSessionBtn} onClick={() => { onClose(); onLeaveMeeting?.(); }}>
+              {/* Active Students */}
+              <div style={styles.section}>
+                <div style={styles.sectionHeader} onClick={() => toggleSection('activeUsers')}>
+                  <span style={styles.sectionTitle}>👤 Active Students</span>
+                  <span style={styles.arrow}>{expandedSection === 'activeUsers' ? '▼' : '▶'}</span>
+                </div>
+                {expandedSection === 'activeUsers' && (
+                  <div style={styles.sectionContent}>
+                    {group?.onlineUsers?.length > 0 ? (
+                      <>
+                        <p style={styles.description}>Students who have sent at least one message</p>
+                        {(() => {
+                          const teacherId = group.admin?._id || group.admin?.id || group.admin;
+                          const active = group.onlineUsers.filter(u => {
+                            const uid = u._id || u.id;
+                            return String(uid) !== String(teacherId) && (messageCounts[uid] || 0) > 0;
+                          });
+                          if (!active.length) return <p style={styles.noUsers}>No active students yet.</p>;
+                          return (
+                            <div style={styles.activeUsersList}>
+                              {active.map(u => {
+                                const uid  = u._id || u.id;
+                                const name = u.username || u.name || 'Unknown';
+                                const cnt  = messageCounts[uid] || 0;
+                                return (
+                                  <div key={uid} style={styles.activeUserItem}>
+                                    <div style={styles.activeUserLeft}>
+                                      <div style={styles.activeStatusDot} />
+                                      <span style={styles.activeUserName}>{name}</span>
+                                    </div>
+                                    <span style={styles.messageCount}>{cnt} {cnt === 1 ? 'msg' : 'msgs'}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
+                      </>
+                    ) : <p style={styles.noUsers}>No users online</p>}
+                  </div>
+                )}
+              </div>
+
+              {/* Statistics */}
+              <div style={styles.section}>
+                <div style={styles.sectionHeader} onClick={() => toggleSection('stats')}>
+                  <span style={styles.sectionTitle}>📊 Statistics</span>
+                  <span style={styles.arrow}>{expandedSection === 'stats' ? '▼' : '▶'}</span>
+                </div>
+                {expandedSection === 'stats' && (
+                  <div style={styles.sectionContent}>
+                    {[
+                      { label: 'Total Messages:', value: messages?.length || 0 },
+                      { label: 'Online Members:', value: group?.onlineUsers?.length || 0 },
+                      { label: 'Total Members:',  value: group?.members?.length || 0 },
+                    ].map((s, i) => (
+                      <div key={i} style={styles.statItem}>
+                        <span style={styles.statLabel}>{s.label}</span>
+                        <span style={styles.statValue}>{s.value}</span>
+                      </div>
+                    ))}
+                    {group?.createdAt && (
+                      <div style={styles.statItem}>
+                        <span style={styles.statLabel}>Session Started:</span>
+                        <span style={styles.statValue}>{new Date(group.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+        </div>{/* end scrollContent */}
+
+        {/* ── BOTTOM BAR — always visible, fixed at bottom ── */}
+        <div style={styles.bottomBar}>
+          {group && resolvedRole === 'student' && onLeaveMeeting && (
+            <button className="sidebar-leave-btn" style={styles.leaveSessionBtn} onClick={() => { onClose(); onLeaveMeeting(); }}>
               → Leave session
             </button>
-          </div>
-        )}
+          )}
+          {resolvedRole === 'student' && onLogout && (
+            <button className="sidebar-logout-btn" style={styles.logoutBottomBtn} onClick={onLogout}>
+              ↗ Logout
+            </button>
+          )}
+        </div>
 
       </div>
     </>
@@ -693,7 +693,9 @@ const Sidebar = ({
 // ══════════════════════════════════════════════════════════════════════════
 const styles = {
   backdrop: { position:'fixed', top:0, left:0, right:0, bottom:0, backgroundColor:'rgba(0,0,0,0.45)', zIndex:999 },
-  sidebar:  { position:'fixed', top:0, right:0, width:'360px', height:'100vh', backgroundColor:'white', boxShadow:'-2px 0 16px rgba(0,0,0,0.12)', transition:'right 0.28s ease', zIndex:1000, overflowY:'auto', display:'flex', flexDirection:'column' },
+  sidebar:  { position:'fixed', top:0, right:0, width:'360px', height:'100vh', backgroundColor:'white', boxShadow:'-2px 0 16px rgba(0,0,0,0.12)', transition:'right 0.28s ease', zIndex:1000, overflow:'hidden', display:'flex', flexDirection:'column' },
+  scrollContent: { flex:1, overflowY:'auto', display:'flex', flexDirection:'column' },
+  bottomBar: { flexShrink:0, borderTop:'2px solid #e5e7eb', backgroundColor:'white', padding:'8px 0' },
 
   // Header — no ClassVibe brand
   sidebarHeader: { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'14px 20px', backgroundColor:'#f9fafb', borderBottom:'1px solid #e5e7eb', flexShrink:0, minHeight:52 },
@@ -736,7 +738,8 @@ const styles = {
   // Student actions
   studentActionsPanel: { padding:'12px 20px', borderBottom:'1px solid #f3f4f6' },
   supportBtn:          { display:'flex', alignItems:'center', gap:'8px', width:'100%', padding:'10px 16px', border:'none', background:'none', fontSize:'14px', fontWeight:'500', color:'#374151', cursor:'pointer', borderRadius:'8px', textAlign:'left', marginBottom:'4px' },
-  leaveSessionBtn:     { display:'flex', alignItems:'center', gap:'8px', width:'100%', padding:'10px 16px', border:'none', background:'none', fontSize:'14px', fontWeight:'600', color:'#DC2626', cursor:'pointer', borderRadius:'8px', textAlign:'left' },
+  leaveSessionBtn:     { display:'flex', alignItems:'center', gap:'8px', width:'calc(100% - 24px)', margin:'4px 12px', padding:'10px 16px', border:'1px solid #FECACA', backgroundColor:'#FEF2F2', fontSize:'14px', fontWeight:'600', color:'#DC2626', cursor:'pointer', borderRadius:'8px', textAlign:'left', transition:'background 0.15s' },
+  logoutBottomBtn:     { display:'flex', alignItems:'center', gap:'8px', width:'calc(100% - 24px)', margin:'4px 12px', padding:'10px 16px', border:'1px solid #BFDBFE', backgroundColor:'#EFF6FF', fontSize:'14px', fontWeight:'500', color:'#2563EB', cursor:'pointer', borderRadius:'8px', textAlign:'left', transition:'background 0.15s' },
 
   divider:       { height:'1px', backgroundColor:'#e5e7eb', margin:'8px 0' },
   sectionsTitle: { padding:'10px 20px 4px', fontSize:'11px', fontWeight:'700', color:'#9ca3af', letterSpacing:'0.5px' },

@@ -125,7 +125,7 @@ const Header = ({
             {/* User profile — shows whenever resolvedUser is available */}
             {resolvedUser && (
               <div style={S.userProfile}>
-                <div style={S.userTextBlock}>
+                <div style={S.userTextBlock} className="header-user-text">
                   <span style={S.userName}>
                     {resolvedUser.name || resolvedUser.username || 'User'}
                   </span>
@@ -151,20 +151,19 @@ const Header = ({
               </div>
             )}
 
-            {/* Bell + hamburger — only when NOT inside a session */}
-            {!groupName && (
-              <>
-                {socket && <NotificationBell socket={socket} />}
-                <button
-                  onClick={onToggleSidebar}
-                  style={S.hamburgerBtn}
-                  aria-label="Menu"
-                >
-                  <span style={S.hLine} />
-                  <span style={S.hLine} />
-                  <span style={S.hLine} />
-                </button>
-              </>
+            {/* Bell — always shown outside session */}
+            {!groupName && socket && <NotificationBell socket={socket} />}
+            {/* Hamburger — outside session only for teachers (students have their own sidebar nav) */}
+            {!groupName && userRole !== 'student' && (
+              <button
+                onClick={onToggleSidebar}
+                style={S.hamburgerBtn}
+                aria-label="Menu"
+              >
+                <span style={S.hLine} />
+                <span style={S.hLine} />
+                <span style={S.hLine} />
+              </button>
             )}
           </div>
         </div>
@@ -342,6 +341,16 @@ const Header = ({
                 <div style={M.qrActions}>
                   <button
                     style={M.copyBtn}
+                    onClick={() => copyToClipboard(
+                      group?.pin
+                        ? `${window.location.origin}${window.location.pathname}?pin=${group.pin}`
+                        : group?.qrCode || ''
+                    )}
+                  >
+                    📋 Copy QR Link
+                  </button>
+                  <button
+                    style={M.copyBtn}
                     onClick={() => {
                       const w = window.open();
                       w.document.write(`<img src="${group.qrCode}" style="max-width:100%;padding:20px"/>`);
@@ -387,7 +396,9 @@ const S = {
     top: 0,
     zIndex: 1000,
     backgroundColor: '#ffffff',
-    boxShadow: '0 1px 0 #e2e8f0, 0 2px 8px rgba(0,0,0,0.04)',
+    borderBottom: '1px solid #e0e7ff',
+    boxShadow: '0 2px 8px rgba(99,102,241,0.08)',
+    boxSizing: 'border-box',
   },
 
   // Brand row
@@ -395,20 +406,23 @@ const S = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: '10px 20px',
-    borderBottom: '1px solid #f1f5f9',
-    minHeight: 52,
+    padding: '10px 24px',
+    minHeight: 54,
+    width: '100%',
+    boxSizing: 'border-box',
   },
-  brandLeft:  { display: 'flex', alignItems: 'center', gap: 12 },
-  logo:       { fontSize: 20, fontWeight: '800', color: '#0f172a', letterSpacing: '-0.5px', userSelect: 'none' },
-  backBtn:    { padding: '5px 12px', fontSize: 13, fontWeight: '600', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer' },
-  brandRight: { display: 'flex', alignItems: 'center', gap: 12 },
+  brandLeft:  { display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 },
+  logo:       { fontSize: 20, fontWeight: '800', color: '#4F46E5', letterSpacing: '-0.5px', userSelect: 'none', whiteSpace: 'nowrap' },
+  backBtn:    { padding: '5px 12px', fontSize: 13, fontWeight: '600', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', flexShrink: 0 },
+  // flexShrink:1 (default) so the right side can compress; minWidth:0 allows overflow truncation
+  brandRight: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 },
 
   // User profile (brand row right)
-  userProfile:    { display: 'flex', alignItems: 'center', gap: 10 },
-  userTextBlock:  { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 },
-  userName:       { fontSize: 13, fontWeight: '700', color: '#0f172a', lineHeight: 1.2 },
-  userRoleLabel:  { fontSize: 11, color: '#64748b', textTransform: 'capitalize' },
+  userProfile:    { display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden' },
+  // className="header-user-text" — hidden via CSS on mobile
+  userTextBlock:  { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, minWidth: 0, overflow: 'hidden', maxWidth: 160 },
+  userName:       { fontSize: 13, fontWeight: '700', color: '#0f172a', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' },
+  userRoleLabel:  { fontSize: 11, color: '#64748b', textTransform: 'capitalize', whiteSpace: 'nowrap' },
   avatarWrap:     { position: 'relative', flexShrink: 0 },
   avatarImg:      { width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '2px solid #e2e8f0', display: 'block' },
   avatarFallback: { width: 36, height: 36, borderRadius: '50%', backgroundColor: '#6366f1', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: '700' },
@@ -418,7 +432,7 @@ const S = {
   hamburgerBtn: { display: 'flex', flexDirection: 'column', justifyContent: 'space-around', width: 32, height: 28, backgroundColor: 'transparent', border: 'none', cursor: 'pointer', padding: 2, gap: 4 },
   hLine:        { display: 'block', width: '100%', height: 2, backgroundColor: '#64748b', borderRadius: 1 },
 
-  // Session sub-header
+  // Session sub-header — wrap allowed so buttons never get clipped
   sessionBar: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -427,10 +441,11 @@ const S = {
     borderBottom: '1px solid #e2e8f0',
     backgroundColor: '#ffffff',
     flexWrap: 'wrap',
-    gap: '8px 12px',
-    minHeight: 52,
+    gap: '6px 8px',
+    width: '100%',
+    boxSizing: 'border-box',
   },
-  sessionLeft: { display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 },
+  sessionLeft: { display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, overflow: 'hidden' },
   liveBadge:   { display: 'inline-flex', alignItems: 'center', padding: '3px 8px', backgroundColor: '#22c55e', color: '#ffffff', borderRadius: 5, fontSize: 10, fontWeight: '800', letterSpacing: '0.8px', flexShrink: 0, lineHeight: 1.6 },
   chatIconBox: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#f1f5f9', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   sessionInfo: { display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, overflow: 'hidden' },

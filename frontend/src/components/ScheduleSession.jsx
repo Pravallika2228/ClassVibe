@@ -35,8 +35,8 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
   const [drafts, setDrafts]           = useState([]);
   const [activeTab, setActiveTab]     = useState('details');
 
-  // ✅ 4-digit preview PIN (1000–9999)
-  const [previewPin] = useState(() => Math.floor(1000 + Math.random() * 9000).toString());
+  // 6-digit preview PIN (100000–999999) — matches backend generatePIN()
+  const [previewPin] = useState(() => Math.floor(100000 + Math.random() * 900000).toString());
 
   useEffect(() => { fetchDrafts(); }, []);
 
@@ -81,7 +81,7 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
     return `${h % 12 || 12}:${m.toString().padStart(2, '0')} ${ampm}`;
   };
 
-  // ✅ FIXED buildPayload: uses actual PIN (4 digits), saves all student data for drafts
+  // buildPayload: uses 6-digit PIN (custom or auto-generated preview), saves all student data for drafts
   const buildPayload = (status = 'scheduled') => {
     // For scheduled sessions: only include students with both email AND password
     // For drafts: include students that have at least an email (password optional — may fill later)
@@ -89,7 +89,7 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
       ? allowedStudents.filter(s => s.email.trim())           // draft: email only required
       : allowedStudents.filter(s => s.email.trim() && s.password.trim()); // schedule: both required
 
-    const effectivePin = customPin || previewPin; // ✅ 4-digit PIN
+    const effectivePin = (customPin.length === 6 ? customPin : null) || previewPin; // 6-digit PIN
 
     return {
       sessionName:     sessionTitle,
@@ -444,20 +444,20 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
                 <div style={S.field}>
                   <label style={S.label}>
                     Custom PIN Override
-                    <span style={S.optional}> (4 digits, optional)</span>
+                    <span style={S.optional}> (6 digits, optional)</span>
                   </label>
                   <input
                     style={S.input}
                     placeholder={`Default: ${previewPin}`}
                     value={customPin}
-                    onChange={e => setCustomPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                    maxLength={4}
+                    onChange={e => setCustomPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    maxLength={6}
                     inputMode="numeric"
                     autoComplete="off"
                   />
-                  {customPin && customPin.length < 4 && (
+                  {customPin && customPin.length < 6 && (
                     <div style={{ fontSize:'12px', color:'#ef4444', marginTop:'4px' }}>
-                      PIN must be exactly 4 digits
+                      PIN must be exactly 6 digits
                     </div>
                   )}
                 </div>
@@ -528,7 +528,7 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
                   <div style={S.previewPinLabel}>SESSION PIN</div>
                   {/* ✅ Shows 4-digit PIN */}
                   <div style={S.previewPinValue}>
-                    {customPin.length === 4 ? customPin : previewPin}
+                    {customPin.length === 6 ? customPin : previewPin}
                   </div>
                 </div>
 

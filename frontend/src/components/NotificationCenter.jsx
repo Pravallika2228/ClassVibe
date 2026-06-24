@@ -2,13 +2,11 @@
 // Notification center panel
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 
 const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
-  const navigate = useNavigate();
 
   // ✅ FIX: useCallback
   const fetchNotifications = useCallback(async () => {
@@ -67,23 +65,14 @@ const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
 
     console.log("📍 Notification clicked:", notification);
 
-    if (notification.actionUrl && notification.actionUrl !== '/') {
+    if (notification.type === 'quiz_started') {
+      const sessionId = notification.metadata?.sessionId;
+      if (sessionId) {
+        window.dispatchEvent(new CustomEvent('openWaitingRoom', { detail: { sessionId } }));
+      }
       onClose();
-      navigate(notification.actionUrl);
-
-      if (notification.type === 'quiz_started') {
-        const sessionId = notification.metadata?.sessionId;
-
-        window.dispatchEvent(new CustomEvent('openWaitingRoom', {
-          detail: { sessionId }
-        }));
-
-        onClose();
-        return;
-      }    
-
-    } else {
-      console.warn("⚠️ Invalid actionUrl:", notification);
+    } else if (notification.actionUrl && notification.actionUrl !== '/') {
+      onClose();
     }
   };
 
@@ -209,7 +198,8 @@ const getNotificationIcon = (type) => {
           ) : notifications.length === 0 ? (
             <div style={styles.empty}>
               <div style={styles.emptyIcon}>🔔</div>
-              <p style={styles.emptyText}>No notifications</p>
+              <p style={styles.emptyTitle}>No Notifications Yet</p>
+              <p style={styles.emptyText}>You're all caught up.</p>
             </div>
           ) : (
             notifications.map((notification) => (
@@ -350,13 +340,20 @@ const styles = {
     color: '#999'
   },
   emptyIcon: {
-    fontSize: '64px',
-    marginBottom: '15px',
-    opacity: 0.5
+    fontSize: '56px',
+    marginBottom: '12px',
+    opacity: 0.4,
+  },
+  emptyTitle: {
+    fontSize: '17px',
+    fontWeight: '700',
+    color: '#1e293b',
+    margin: '0 0 6px',
   },
   emptyText: {
-    fontSize: '16px',
-    fontWeight: '500'
+    fontSize: '13px',
+    color: '#94a3b8',
+    margin: 0,
   },
   notificationCard: {
     display: 'flex',
