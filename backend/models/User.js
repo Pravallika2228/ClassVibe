@@ -68,6 +68,12 @@ const userSchema = new mongoose.Schema({
   socketId: {
     type: String,
     default: null
+  },
+
+  // Profile photo (base64 or URL)
+  profilePhoto: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true  // Adds createdAt and updatedAt automatically

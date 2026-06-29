@@ -378,7 +378,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.put('/api/auth/update-profile', authenticateToken, async (req, res) => {
   try {
     const { name, username, profilePhoto } = req.body;
-    const user = await User.findById(req.user.userId);
+    const user = await User.findById(req.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
     if (username && username.trim() !== user.username) {
       const exists = await User.findOne({ username: username.trim(), _id: { $ne: user._id } });
