@@ -86,8 +86,14 @@ const notificationSchema = new mongoose.Schema({
   icon: String,
   
   // Expiry (notifications can expire)
-  expiresAt: Date
-  
+  expiresAt: Date,
+
+  // Extra data (groupId, pin, sessionId etc.)
+  metadata: {
+    type: mongoose.Schema.Types.Mixed,
+    default: {}
+  }
+
 }, {
   timestamps: true
 });

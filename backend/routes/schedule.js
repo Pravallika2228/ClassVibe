@@ -12,6 +12,7 @@ const router = express.Router();
 const ScheduledSession = require('../models/ScheduledSession');
 const Group = require('../models/Group');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 
@@ -193,6 +194,37 @@ router.post('/create', authenticateToken, async (req, res) => {
     await session.populate('teacher', 'name email');
 
     console.log('✅ Scheduled session created:', session.sessionName);
+
+    // Notify allowed students about the scheduled session
+    try {
+      const emailList = session.allowedEmails || [];
+      if (emailList.length > 0) {
+        const students = await User.find({ email: { $in: emailList }, role: 'student' }).select('_id');
+        if (students.length > 0) {
+          const teacher = await User.findById(req.userId);
+          const dt = session.scheduledDate
+            ? `${new Date(session.scheduledDate).toLocaleDateString()} at ${session.scheduledTime || ''}`
+            : session.scheduledTime || '';
+          await Notification.createBulkNotifications(
+            students.map(s => s._id),
+            {
+              sender: req.userId,
+              type: 'session_scheduled',
+              title: '📅 New Session Scheduled',
+              message: `${teacher?.name || teacher?.username} scheduled "${session.sessionName}"${dt ? ' on ' + dt : ''}`,
+              relatedSession: session._id,
+              priority: 'medium',
+              icon: '📅',
+              metadata: { sessionId: session._id.toString() }
+            }
+          );
+          console.log(`📢 Notified ${students.length} students about scheduled session`);
+        }
+      }
+    } catch (notifErr) {
+      console.error('Schedule notification error (non-fatal):', notifErr.message);
+    }
+
     res.status(201).json({ message: 'Session scheduled successfully', session });
 
   } catch (error) {
@@ -358,7 +390,7 @@ router.post('/:sessionId/start', authenticateToken, async (req, res) => {
 
     console.log('✅ Scheduled session started:', session.sessionName);
 
-    // Notify registered students via socket
+    // Notify registered students — socket + persistent DB notification
     const io = req.app.get('io');
     if (io) {
       session.registeredStudents.forEach(student => {
@@ -368,6 +400,26 @@ router.post('/:sessionId/start', authenticateToken, async (req, res) => {
           pin: group.pin
         });
       });
+    }
+
+    try {
+      if (session.registeredStudents.length > 0) {
+        const teacher = await User.findById(session.teacher);
+        const studentIds = session.registeredStudents.map(s => s.user);
+        await Notification.createBulkNotifications(studentIds, {
+          sender: session.teacher,
+          type: 'session_started',
+          title: '🚀 Session is Live Now!',
+          message: `${teacher?.name || teacher?.username} started "${session.sessionName}". PIN: ${group.pin}`,
+          relatedGroup: group._id,
+          priority: 'high',
+          icon: '🚀',
+          metadata: { groupId: group._id.toString(), pin: group.pin }
+        });
+        console.log(`📢 Notified ${studentIds.length} registered students that session went live`);
+      }
+    } catch (notifErr) {
+      console.error('Start-session notification error (non-fatal):', notifErr.message);
     }
 
     res.json({

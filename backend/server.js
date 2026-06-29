@@ -23,6 +23,7 @@ const connectDB = require('./config/db');
 const User = require('./models/User');
 const Group = require('./models/Group');
 const Message = require('./models/Message');
+const Notification = require('./models/Notification');
 
 // ============================================
 // SERVER SETUP
@@ -485,9 +486,41 @@ app.post('/api/groups/create', authenticateToken, async (req, res) => {
     
     await group.save();
     await group.populate('admin', 'username name');
-    
+
     console.log('✅ Group created:', { groupName, pin, admin: req.userId });
-    
+
+    // Notify all students who have previously joined any of this teacher's sessions
+    try {
+      const teacher = await User.findById(req.userId);
+      const pastGroups = await Group.find({ admin: req.userId }).select('members');
+      const studentSet = new Set();
+      const studentIds = [];
+      pastGroups.forEach(g => {
+        (g.members || []).forEach(m => {
+          const uid = (m.user?._id || m.user)?.toString();
+          if (uid && uid !== req.userId.toString() && !studentSet.has(uid)) {
+            studentSet.add(uid);
+            studentIds.push(m.user?._id || m.user);
+          }
+        });
+      });
+      if (studentIds.length > 0) {
+        await Notification.createBulkNotifications(studentIds, {
+          sender: req.userId,
+          type: 'session_started',
+          title: '🚀 Live Session Started!',
+          message: `${teacher?.name || teacher?.username} just started "${groupName}". PIN: ${pin}`,
+          relatedGroup: group._id,
+          priority: 'high',
+          icon: '🚀',
+          metadata: { groupId: group._id.toString(), pin }
+        });
+        console.log(`📢 Notified ${studentIds.length} students about new session`);
+      }
+    } catch (notifErr) {
+      console.error('Notification error (non-fatal):', notifErr.message);
+    }
+
     res.status(201).json({
       message: 'Group created successfully',
       group: {
@@ -876,13 +909,16 @@ io.on('connection', (socket) => {
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       socket.userId = decoded.userId;
-      
+
+      // Join personal room so the user receives targeted notifications
+      socket.join(socket.userId.toString());
+
       await User.findByIdAndUpdate(socket.userId, {
         socketId: socket.id,
         isOnline: true,
         lastSeen: new Date()
       });
-      
+
       console.log(`✅ User ${socket.userId} authenticated`);
       socket.emit('authenticated', { success: true });
       
