@@ -12,60 +12,69 @@ const Notification = require('../models/Notification');
 async function checkSessionReminders() {
   try {
     console.log('🔔 Checking for upcoming session reminders...');
-    
-    // Calculate time window (now to 15 minutes from now)
+
     const now = new Date();
-    const in15Minutes = new Date(now.getTime() + 15 * 60 * 1000);
-    
-    // Find sessions scheduled to start in the next 15 minutes
-    const upcomingSessions = await ScheduledSession.find({
+    const in20Minutes = new Date(now.getTime() + 20 * 60 * 1000);
+
+    // Fetch all scheduled, not-yet-reminded, reminders-enabled sessions.
+    // We filter by combined date+time in JS because scheduledDate is stored
+    // as midnight-only and scheduledTime is a separate "HH:MM" string.
+    const candidates = await ScheduledSession.find({
       status: 'scheduled',
-      scheduledDate: {
-        $gte: now,
-        $lte: in15Minutes
-      },
-      // Only send reminder if we haven't already sent one
+      enableReminders: true,
       reminderSent: { $ne: true }
-    }).populate('createdBy', 'name username');
-    
-    if (upcomingSessions.length === 0) {
-      console.log('✅ No upcoming sessions found');
+    }).populate('teacher', 'name username');
+
+    // Build the combined datetime and keep only those starting within 15 min
+    const sessionsToRemind = candidates.filter(session => {
+      if (!session.scheduledDate || !session.scheduledTime) return false;
+      const dateStr = new Date(session.scheduledDate).toISOString().split('T')[0];
+      const sessionDT = new Date(`${dateStr}T${session.scheduledTime}`);
+      return sessionDT >= now && sessionDT <= in20Minutes;
+    });
+
+    if (sessionsToRemind.length === 0) {
+      console.log('✅ No sessions starting within 15 minutes');
       return;
     }
-    
-    console.log(`📬 Found ${upcomingSessions.length} upcoming session(s)`);
-    
-    // Send reminders for each session
-    for (const session of upcomingSessions) {
+
+    console.log(`📬 Found ${sessionsToRemind.length} session(s) needing reminders`);
+
+    for (const session of sessionsToRemind) {
       try {
-        // Get student IDs from registered students
         const studentIds = session.registeredStudents.map(s => s.user);
-        
+
         if (studentIds.length === 0) {
-          console.log(`⚠️ No registered students for session: ${session.sessionName}`);
+          console.log(`⚠️ No registered students for: ${session.sessionName}`);
+          session.reminderSent = true;
+          await session.save();
           continue;
         }
-        
-        console.log(`📨 Sending reminders to ${studentIds.length} students for: ${session.sessionName}`);
-        
-        // Send notification to all registered students
-        await Notification.notifySessionStartingSoon(session, studentIds);
-        
-        // Mark reminder as sent to avoid duplicate notifications
+
+        console.log(`📨 Reminding ${studentIds.length} students about: ${session.sessionName}`);
+
+        // Build enriched session object for the notification template
+        const enrichedSession = {
+          ...session.toObject(),
+          teacherName: session.teacher?.name || session.teacher?.username || 'Teacher'
+        };
+
+        await Notification.notifySessionStartingSoon(enrichedSession, studentIds);
+
         session.reminderSent = true;
         await session.save();
-        
-        console.log(`✅ Reminders sent for session: ${session.sessionName}`);
-        
+
+        console.log(`✅ Reminders sent for: ${session.sessionName}`);
+
       } catch (sessionError) {
-        console.error(`❌ Error sending reminder for session ${session._id}:`, sessionError);
+        console.error(`❌ Reminder error for session ${session._id}:`, sessionError.message);
       }
     }
-    
+
     console.log('✅ Session reminder check complete');
-    
+
   } catch (error) {
-    console.error('❌ Session reminder error:', error);
+    console.error('❌ Session reminder job error:', error.message);
   }
 }
 

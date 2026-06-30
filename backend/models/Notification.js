@@ -238,15 +238,16 @@ notificationSchema.statics.notifyQuizResult = async function(studentId, quiz, sc
 
 // Session starting soon notification
 notificationSchema.statics.notifySessionStartingSoon = async function(session, studentIds) {
+  const teacher = session.teacherName || 'Your teacher';
   return this.createBulkNotifications(studentIds, {
     type: 'session_starting',
-    title: '⏰ Session Starting Soon',
-    message: `${session.sessionName} starts in 15 minutes!`,
-    relatedGroup: session.group,
+    title: '⏰ Session Starting in 15 Minutes!',
+    message: `${teacher}'s "${session.sessionName}" starts soon${session.scheduledTime ? ' at ' + session.scheduledTime : ''}.`,
     relatedSession: session._id,
     actionUrl: `/schedule`,
     priority: 'high',
-    icon: '⏰'
+    icon: '⏰',
+    metadata: { sessionId: session._id?.toString(), sessionName: session.sessionName }
   });
 };
 
