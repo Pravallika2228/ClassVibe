@@ -290,7 +290,7 @@ app.post('/api/auth/register', async (req, res) => {
         { email: finalEmail }
       ]
     });
-    
+
     if (existingUser) {
       return res.status(400).json({ error: 'Username or email already taken' });
     }
@@ -370,6 +370,83 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Server error during login' });
+  }
+});
+
+// ------------------
+// STUDENT GUEST AUTH  (used by "Open Student Dashboard" feature only)
+// Register if email is new; sign in if email already exists.
+// Leaves the existing /register and /login routes completely untouched.
+// ------------------
+app.post('/api/auth/student-guest-auth', async (req, res) => {
+  try {
+    const { email, password, name } = req.body;
+
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'Email, password, and name are required.' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+    }
+
+    const emailNorm = email.trim().toLowerCase();
+
+    // ── Case 1: email already exists → sign in ──────────────────────────────
+    const existingUser = await User.findOne({ email: emailNorm });
+    if (existingUser) {
+      const passwordOk = existingUser.password
+        ? await existingUser.comparePassword(password)
+        : false;
+      if (!passwordOk) {
+        return res.status(401).json({
+          error: 'An account with this email already exists. Enter the password you used when you first joined a classroom.'
+        });
+      }
+      const token = generateToken(existingUser._id);
+      return res.json({
+        message: 'Signed in successfully',
+        token,
+        user: {
+          id:       existingUser._id.toString(),
+          username: existingUser.username,
+          email:    existingUser.email,
+          name:     existingUser.name,
+          role:     existingUser.role
+        }
+      });
+    }
+
+    // ── Case 2: new email → register ─────────────────────────────────────────
+    // Generate a unique username: email-prefix + random suffix so it never
+    // collides with existing usernames even if two people share a prefix.
+    const prefix = emailNorm.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 12);
+    const uniqueUsername = (prefix + '_' + Math.random().toString(36).slice(2, 7)).slice(0, 20);
+
+    const user = new User({
+      username: uniqueUsername,
+      email:    emailNorm,
+      password,
+      name:     name.trim(),
+      role:     'student'
+    });
+    await user.save();
+
+    const token = generateToken(user._id);
+    return res.status(201).json({
+      message: 'Account created successfully',
+      token,
+      user: {
+        id:       user._id.toString(),
+        username: user.username,
+        email:    user.email,
+        name:     user.name,
+        role:     user.role
+      }
+    });
+
+  } catch (error) {
+    console.error('Student guest auth error:', error);
+    return res.status(500).json({ error: 'Server error during authentication.' });
   }
 });
 

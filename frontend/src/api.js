@@ -34,6 +34,23 @@ api.interceptors.response.use(
 );
 
 // ============================================
+// BACKEND WARM-UP (Render free tier cold start)
+// ============================================
+
+/**
+ * Ping the backend to wake it up from Render's free-tier sleep.
+ * Fire-and-forget — call this on app mount so the server is warm
+ * by the time the user submits the login form.
+ */
+export const pingBackend = async () => {
+  try {
+    await axios.get(`${API_URL}/health`, { timeout: 60000, withCredentials: true });
+  } catch {
+    // Ignore — the purpose is just to start the cold-start process
+  }
+};
+
+// ============================================
 // AUTH API CALLS
 // ============================================
 
@@ -69,6 +86,19 @@ export const login = async (email, password) => {
     return response.data;
   } catch (error) {
     console.error('Login API error:', error);
+    throw error;
+  }
+};
+
+// Used exclusively by the "Open Student Dashboard" feature.
+// Registers a new student if the email is new; signs in if the email already exists.
+// Does NOT touch the existing /register or /login routes.
+export const studentGuestAuth = async (email, password, name) => {
+  try {
+    const response = await api.post('/auth/student-guest-auth', { email, password, name });
+    return response.data;
+  } catch (error) {
+    console.error('Student guest auth error:', error);
     throw error;
   }
 };

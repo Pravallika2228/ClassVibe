@@ -7,7 +7,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import "./StudentJoin.css";
-import { joinGroup } from "../api";
+import { joinGroup, studentGuestAuth } from "../api";
 import Footer from "../pages/Footer";
 import {FaUserGraduate, FaHashtag, FaQrcode} from "react-icons/fa"
 
@@ -27,6 +27,15 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
   const [loading,     setLoading]     = useState(false);
   const [message,     setMessage]     = useState("");
   const [messageType, setMessageType] = useState("error");
+
+  // "Continue without joining" secondary path
+  const [showGuestForm,    setShowGuestForm]    = useState(false);
+  const [guestName,        setGuestName]        = useState("");
+  const [guestEmail,       setGuestEmail]       = useState("");
+  const [guestPassword,    setGuestPassword]    = useState("");
+  const [guestLoading,     setGuestLoading]     = useState(false);
+  const [guestMessage,     setGuestMessage]     = useState("");
+  const [guestMessageType, setGuestMessageType] = useState("error");
 
   const videoRef       = useRef(null);
   const canvasRef      = useRef(null);
@@ -50,6 +59,40 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
   const resetMessages = () => { setMessage(""); setMessageType("error"); };
 
   const isValidEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v).toLowerCase());
+
+  // ── "Continue without joining" handler ─────────────────────────────────
+  const handleGuestLogin = async (e) => {
+    e.preventDefault();
+    setGuestMessage(""); setGuestMessageType("error");
+
+    if (!guestName.trim())                { setGuestMessage("Enter your name.");             return; }
+    if (!guestEmail.trim())               { setGuestMessage("Enter your email.");            return; }
+    if (!isValidEmail(guestEmail.trim())) { setGuestMessage("Enter a valid email.");         return; }
+    if (guestPassword.length < 6)         { setGuestMessage("Password must be ≥ 6 chars."); return; }
+
+    setGuestLoading(true);
+    try {
+      // Single endpoint: registers if email is new, signs in if email already exists.
+      const result = await studentGuestAuth(guestEmail.trim(), guestPassword, guestName.trim());
+
+      const token = result?.token ?? null;
+      const user  = result?.user  ?? null;
+
+      if (!token) throw new Error("Authentication failed — no token received.");
+
+      localStorage.setItem("token", token);
+      if (user) localStorage.setItem("user", JSON.stringify(user));
+
+      setGuestMessageType("success");
+      setGuestMessage("Authenticated! Opening dashboard…");
+      setTimeout(() => onJoinSuccess(null, user, token), 600);
+    } catch (err) {
+      const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || "Authentication failed.";
+      setGuestMessage(errMsg); setGuestMessageType("error");
+    } finally {
+      setGuestLoading(false);
+    }
+  };
 
   const parsePinFromQr = (raw) => {
     if (!raw) return "";
@@ -79,31 +122,43 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
     // password is optional — only required if the session is private (backend will reject if wrong)
 
     setLoading(true);
-    try {
+    const attemptJoin = async () => {
       const resp = await joinGroup({
         pin:      p,
         name:     name.trim(),
         email:    email.trim(),
-        password: password.trim() || undefined, // ✅ NEW: send password if provided
+        password: password.trim() || undefined,
       });
-
       const token = resp?.token ?? resp?.data?.token ?? null;
       const user  = resp?.user  ?? resp?.data?.user  ?? null;
       const group = resp?.group ?? resp?.data?.group ?? null;
-
       if (token) localStorage.setItem("token", token);
       if (user)  localStorage.setItem("user",  JSON.stringify(user));
-
       setMessageType("success");
       setMessage(group ? `Joined "${group.groupName}" successfully!` : "Joined classroom successfully!");
-
       if (onJoinSuccess) onJoinSuccess(group ?? { pin: p }, user, token);
+    };
+    try {
+      await attemptJoin();
     } catch (err) {
       console.error("Join failed:", err);
-      const serverMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message
-        || "Failed to join. Please check your PIN, email and password.";
-      setMessage(serverMsg);
-      setMessageType("error");
+      // Network error = Render cold start. Retry once after 12s automatically.
+      const isNetworkErr = !err.response;
+      if (isNetworkErr) {
+        setMessageType("error");
+        setMessage("Server is starting up (Render free tier). Retrying in 12 seconds…");
+        await new Promise(r => setTimeout(r, 12000));
+        try {
+          await attemptJoin();
+        } catch (retryErr) {
+          const retryMsg = retryErr?.response?.data?.error || retryErr?.response?.data?.message || "Server took too long. Please try again.";
+          setMessage(retryMsg); setMessageType("error");
+        }
+      } else {
+        const serverMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message
+          || "Failed to join. Please check your PIN, email and password.";
+        setMessage(serverMsg); setMessageType("error");
+      }
     } finally { setLoading(false); }
   };
 
@@ -277,6 +332,102 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
             <div className="pin-form card">
               <h3>QR Help</h3>
               <p>Your browser doesn't support the native QR scanner. Use the PIN option, or try Chrome on Android / Safari on iOS.</p>
+            </div>
+          )}
+
+          {/* ── "Continue without joining" section ── */}
+          {!showPinForm && !scanning && !showGuestForm && (
+            <div style={{ textAlign:'center', marginTop:'24px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:'12px', marginBottom:'16px' }}>
+                <div style={{ flex:1, height:'1px', backgroundColor: darkMode?'#334155':'#e5e7eb' }} />
+                <span style={{ fontSize:'12px', color: darkMode?'#64748b':'#9ca3af', fontWeight:'600', letterSpacing:'0.5px' }}>OR</span>
+                <div style={{ flex:1, height:'1px', backgroundColor: darkMode?'#334155':'#e5e7eb' }} />
+              </div>
+              <button
+                type="button"
+                onClick={() => { resetMessages(); setShowGuestForm(true); }}
+                style={{
+                  background:'none',
+                  border: `1.5px dashed ${darkMode?'#475569':'#d1d5db'}`,
+                  borderRadius:'10px',
+                  color: darkMode?'#94a3b8':'#6b7280',
+                  fontSize:'13px',
+                  fontWeight:'600',
+                  cursor:'pointer',
+                  padding:'12px 24px',
+                  width:'100%',
+                  transition:'all 0.2s',
+                }}
+              >
+                Continue without joining a classroom →
+              </button>
+            </div>
+          )}
+
+          {/* ── Guest login form ── */}
+          {showGuestForm && (
+            <div className="pin-form card" style={{
+              backgroundColor: darkMode?'#1e293b':'#ffffff',
+              color: darkMode?'#f1f5f9':'#111827',
+              border: darkMode?'1px solid #334155':'undefined',
+            }}>
+              <h3 style={{ color: darkMode?'#f1f5f9':'#111827' }}>Enter Student Dashboard</h3>
+              <p className="hint" style={{ marginBottom:'16px', color: darkMode?'#94a3b8':'#6b7280' }}>
+                Create an account or sign in. You can join a classroom later.
+              </p>
+
+              <form onSubmit={handleGuestLogin} autoComplete="off">
+                <label style={{ color: darkMode?'#e2e8f0':'#374151' }}>Your Name *</label>
+                <input
+                  value={guestName}
+                  onChange={e => setGuestName(e.target.value)}
+                  placeholder="e.g., Priya"
+                  autoComplete="name"
+                  required
+                />
+
+                <label style={{ color: darkMode?'#e2e8f0':'#374151' }}>Email Address *</label>
+                <input
+                  value={guestEmail}
+                  onChange={e => setGuestEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  type="email"
+                  autoComplete="email"
+                  required
+                />
+
+                <label style={{ color: darkMode?'#e2e8f0':'#374151' }}>Password *
+                  <span style={{ fontWeight:'400', color:'#9ca3af', marginLeft:6, fontSize:'12px' }}>
+                    (min. 6 characters — used to sign in again later)
+                  </span>
+                </label>
+                <input
+                  value={guestPassword}
+                  onChange={e => setGuestPassword(e.target.value)}
+                  placeholder="Choose a password"
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                />
+
+                <button type="submit" className="create-btn" disabled={guestLoading}>
+                  {guestLoading ? "Please wait…" : "Open Student Dashboard"}
+                </button>
+
+                <button
+                  type="button"
+                  style={{ background:'none', border:'none', color: darkMode?'#94a3b8':'#6b7280', fontSize:'13px', cursor:'pointer', marginTop:'8px', textDecoration:'underline' }}
+                  onClick={() => { setGuestMessage(""); setShowGuestForm(false); }}
+                >
+                  ← Back
+                </button>
+
+                {guestMessage && (
+                  <div className={`msg ${guestMessageType === "success" ? "success" : "error"}`} style={{ marginTop:'12px' }}>
+                    {guestMessage}
+                  </div>
+                )}
+              </form>
             </div>
           )}
 
