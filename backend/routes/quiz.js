@@ -455,7 +455,32 @@ router.get('/group/:groupId/active', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to get active session' });
   }
 });
-// ... Keep all other existing routes (start session, join, etc.) from previous quiz.js ...
-// (I'm shortening this for space, but include ALL the session management routes from your original file)
+// Get quiz session history for a group
+router.get('/group/:groupId/history', authenticateToken, async (req, res) => {
+  try {
+    const { groupId } = req.params;
+
+    const sessions = await QuizSession.find({ group: groupId })
+      .populate('quiz', 'title questions')
+      .sort({ createdAt: -1 })
+      .limit(20);
+
+    const quizzes = sessions.map(s => ({
+      _id:          s._id,
+      title:        s.quiz?.title || 'Quiz',
+      quiz:         s.quiz,
+      status:       s.status || 'completed',
+      participants: s.participants || [],
+      averageScore: s.averageScore ?? null,
+      createdAt:    s.createdAt,
+      questions:    s.quiz?.questions || [],
+    }));
+
+    res.json({ quizzes });
+  } catch (error) {
+    console.error('Get quiz history error:', error);
+    res.status(500).json({ error: 'Failed to fetch quiz history' });
+  }
+});
 
 module.exports = router;
