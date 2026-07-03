@@ -453,6 +453,12 @@ function App() {
         setGroupsLoading(true);
         socket.connect();
         socket.emit('authenticate', savedToken);
+        // Re-authenticate after socket auto-reconnect (Render cold start, network blip)
+        const reAuth = () => {
+          const t = localStorage.getItem('token');
+          if (t) socket.emit('authenticate', t);
+        };
+        socket.on('connect', reAuth);
         loadGroups(parsedUser?.role === 'teacher');
       } catch (err) {
         console.error('Error restoring session:', err);
@@ -461,6 +467,7 @@ function App() {
     } else {
       setAuthScreen(pinFromUrl ? 'student' : 'home');
     }
+    return () => socket.off('connect');
   }, [loadGroups]);
 
   useEffect(() => {

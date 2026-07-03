@@ -1029,10 +1029,10 @@ const QuizCreator = ({ groupId, onClose, onSuccess }) => {
                 ← Back
               </button>
               <div style={styles.footerActions}>
-                <button onClick={handleSaveChanges} disabled={loading} style={styles.saveBtn}>
+                <button onClick={() => handleSaveChanges(false)} disabled={loading} style={styles.saveBtn}>
                   {loading ? 'Saving...' : 'Save Draft'}
                 </button>
-                <button onClick={handleSaveChanges} disabled={loading} style={styles.publishBtn}>
+                <button onClick={() => handleSaveChanges(true)} disabled={loading} style={styles.publishBtn}>
                   {loading ? 'Publishing...' : '🚀 Start Quiz Now'}
                 </button>
               </div>

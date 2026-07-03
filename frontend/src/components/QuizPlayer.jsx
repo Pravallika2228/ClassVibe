@@ -20,6 +20,8 @@ const QuizPlayer = ({ sessionId, onClose }) => {
   const [totalQuestions, setTotalQuestions] = useState(0);
 
   const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [fillFocused, setFillFocused] = useState(false);
+  const fillInputRef = useRef(null);
   const [selectedAnswers, setSelectedAnswers] = useState([]);
   const [textAnswer, setTextAnswer] = useState('');
   const [hasAnswered, setHasAnswered] = useState(false);
@@ -57,6 +59,14 @@ const QuizPlayer = ({ sessionId, onClose }) => {
   useEffect(() => { selectedAnswerRef.current = selectedAnswer; }, [selectedAnswer]);
   useEffect(() => { selectedAnswersRef.current = selectedAnswers; }, [selectedAnswers]);
   useEffect(() => { textAnswerRef.current = textAnswer; }, [textAnswer]);
+
+  // Focus the FIB input whenever a fill_in_blank question appears
+  useEffect(() => {
+    if (currentView === 'question' && currentQuestion?.questionType === 'fill_in_blank' && !hasAnswered) {
+      const t = setTimeout(() => fillInputRef.current?.focus(), 150);
+      return () => clearTimeout(t);
+    }
+  }, [currentView, currentQuestion, hasAnswered]);
 
   // Auto-submit uses refs — no stale closures
   const handleAutoSubmit = () => {
@@ -301,16 +311,57 @@ const QuizPlayer = ({ sessionId, onClose }) => {
     if (questionType === 'fill_in_blank') {
       return (
         <div style={styles.fillInBlankContainer}>
+          <label htmlFor="fib-input" style={styles.fillInBlankLabel}>
+            Your Answer
+          </label>
           <input
+            id="fib-input"
+            ref={fillInputRef}
             type="text"
+            inputMode="text"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
             value={textAnswer}
-            onChange={(e) => !hasAnswered && setTextAnswer(e.target.value)}
-            placeholder="Type your answer here..."
+            onChange={(e) => { if (!hasAnswered) setTextAnswer(e.target.value); }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !hasAnswered && textAnswer.trim()) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+            onFocus={() => setFillFocused(true)}
+            onBlur={() => setFillFocused(false)}
+            placeholder="Type your answer..."
             disabled={hasAnswered}
-            style={{ ...styles.fillInBlankInput, opacity: hasAnswered ? 0.6 : 1, cursor: hasAnswered ? 'not-allowed' : 'text' }}
-            autoFocus
+            aria-label="Fill in the blank answer"
+            aria-disabled={hasAnswered}
+            style={{
+              ...styles.fillInBlankInput,
+              opacity: hasAnswered ? 0.6 : 1,
+              cursor: hasAnswered ? 'not-allowed' : 'text',
+              border: hasAnswered
+                ? '3px solid #ccc'
+                : fillFocused
+                  ? '3px solid #25D366'
+                  : '3px solid #4F46E5',
+              boxShadow: fillFocused && !hasAnswered
+                ? '0 0 0 4px rgba(37,211,102,0.18)'
+                : 'none',
+              transition: 'border 0.15s ease, box-shadow 0.15s ease'
+            }}
           />
-          {textAnswer && <div style={styles.characterCount}>{textAnswer.length} characters</div>}
+          <div style={styles.fillInBlankFooter}>
+            {!hasAnswered && (
+              <span style={styles.fillInBlankHint}>
+                Press <kbd style={styles.kbd}>Enter ↵</kbd> to submit
+              </span>
+            )}
+            {hasAnswered && (
+              <span style={styles.fillInBlankSaved}>✓ Answer submitted</span>
+            )}
+          </div>
         </div>
       );
     }
@@ -677,7 +728,12 @@ const styles = {
   questionText: { fontSize: '24px', fontWeight: '600', color: '#1a1a1a', lineHeight: '1.4', marginBottom: '12px' },
   questionPoints: { fontSize: '14px', fontWeight: '600', color: '#25D366' },
   fillInBlankContainer: { marginBottom: '25px' },
-  fillInBlankInput: { width: '100%', padding: '18px 20px', fontSize: '18px', border: '3px solid #4F46E5', borderRadius: '12px', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box' },
+  fillInBlankLabel: { display: 'block', fontSize: '13px', fontWeight: '700', color: '#4F46E5', marginBottom: '10px', letterSpacing: '0.5px', textTransform: 'uppercase' },
+  fillInBlankInput: { display: 'block', width: '100%', padding: '16px 20px', fontSize: '18px', borderRadius: '12px', outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: '#fff', color: '#1a1a1a', lineHeight: '1.4', WebkitAppearance: 'none' },
+  fillInBlankFooter: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '10px', minHeight: '22px' },
+  fillInBlankHint: { fontSize: '13px', color: '#888' },
+  fillInBlankSaved: { fontSize: '13px', fontWeight: '600', color: '#25D366' },
+  kbd: { display: 'inline-block', padding: '2px 7px', fontSize: '11px', fontFamily: 'inherit', fontWeight: '700', color: '#444', backgroundColor: '#f0f0f0', border: '1px solid #bbb', borderRadius: '4px', boxShadow: '0 1px 2px rgba(0,0,0,0.15)' },
   characterCount: { marginTop: '8px', fontSize: '12px', color: '#666', textAlign: 'right' },
   multiSelectHint: { fontSize: '14px', fontWeight: '600', color: '#4F46E5', marginBottom: '12px', padding: '10px', backgroundColor: '#E3F2FD', borderRadius: '8px', textAlign: 'center' },
   checkbox: { width: '28px', height: '28px', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'all 0.2s' },
@@ -752,6 +808,22 @@ if (typeof document !== 'undefined') {
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.8; } }
     @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+
+    /* Fill in Blank — mobile keyboard stays below input */
+    @media (max-width: 600px) {
+      #fib-input {
+        font-size: 16px !important; /* prevents iOS zoom on focus */
+        padding: 14px 16px !important;
+      }
+    }
+
+    /* Dark mode support */
+    @media (prefers-color-scheme: dark) {
+      #fib-input {
+        background-color: #1e1e2e !important;
+        color: #e0e0e0 !important;
+      }
+    }
   `;
   document.head.appendChild(styleSheet);
 }

@@ -53,32 +53,42 @@ const quizSchema = new mongoose.Schema({
       type: String,
       required: true
     },
-    
-    // Multiple choice options
-    options: [{
+
+    // Determines how the question is rendered and evaluated
+    questionType: {
       type: String,
-      required: true
-    }],
-    
-    // Index of correct answer (0-3)
+      enum: ['multiple_choice', 'fill_in_blank', 'true_false', 'multiple_select'],
+      default: 'multiple_choice'
+    },
+
+    // Options array — empty for fill_in_blank
+    options: [{ type: String }],
+
+    // Correct answer: Number (MC/TF), String (FIB), Number[] (multiple_select)
     correctAnswer: {
       type: mongoose.Schema.Types.Mixed,
       required: true
     },
-    
+
     // Explanation (optional)
     explanation: String,
-    
+
     // Points for this question
     points: {
       type: Number,
       default: 10
     },
-    
+
     // Time limit in seconds
     timeLimit: {
       type: Number,
       default: 30
+    },
+
+    difficulty: {
+      type: String,
+      enum: ['easy', 'medium', 'hard', 'expert'],
+      default: 'medium'
     }
   }],
   
@@ -177,14 +187,17 @@ quizSchema.methods.getSessionQuiz = function() {
     questions = this.shuffleArray(questions);
   }
   
-  // Shuffle options if enabled
+  // Shuffle options if enabled — skip for fill_in_blank (no options, correctAnswer is string)
   if (this.settings.shuffleOptions) {
     questions = questions.map(q => {
+      if (q.questionType === 'fill_in_blank' || !q.options || q.options.length === 0) {
+        return q.toObject ? q.toObject() : q;
+      }
       const options = [...q.options];
       const correctOption = options[q.correctAnswer];
       const shuffledOptions = this.shuffleArray(options);
       const newCorrectIndex = shuffledOptions.indexOf(correctOption);
-      
+
       return {
         ...q.toObject(),
         options: shuffledOptions,

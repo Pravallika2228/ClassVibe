@@ -28,18 +28,41 @@ function setupQuizSocketHandlers(io, socket) {
   // ========================================
 
   /**
-   * Teacher starts quiz (begins Question 1) — UNCHANGED
+   * Teacher joins the quiz session socket room so they receive all session events.
+   * Must be emitted by QuizHost immediately on mount, before any other quiz event.
+   */
+  socket.on('teacher:joinSession', (data) => {
+    const { sessionId } = data || {};
+    if (!sessionId) return;
+    socket.join(sessionId);
+    console.log(`👨‍🏫 Teacher ${socket.userId} joined session room: ${sessionId}`);
+    socket.emit('teacher:sessionJoined', { sessionId });
+  });
+
+  /**
+   * Teacher starts quiz (begins Question 1)
    */
   socket.on('teacher:startQuiz', async (data) => {
     try {
       const { sessionId } = data;
       console.log('🚀 Teacher starting quiz:', sessionId);
 
+      if (!socket.userId) {
+        return socket.emit('error', { message: 'Not authenticated. Please refresh and try again.' });
+      }
+
       const session = await QuizSession.findById(sessionId).populate('quiz');
       if (!session) return socket.emit('error', { message: 'Session not found' });
 
       if (session.host.toString() !== socket.userId.toString()) {
         return socket.emit('error', { message: 'Only host can start quiz' });
+      }
+
+      if (!session.quiz) {
+        return socket.emit('error', { message: 'Quiz not found. It may have been deleted.' });
+      }
+      if (!session.quiz.questions || session.quiz.questions.length === 0) {
+        return socket.emit('error', { message: 'Quiz has no questions.' });
       }
 
       session.status = 'active';
@@ -302,8 +325,16 @@ function setupQuizSocketHandlers(io, socket) {
       const session = await QuizSession.findById(sessionId).populate('quiz');
       if (!session) return;
 
-      const question   = session.quiz.questions[questionIndex];
-      const isCorrect  = selectedAnswer === question.correctAnswer;
+      const question = session.quiz.questions[questionIndex];
+
+      let isCorrect;
+      if (question.questionType === 'fill_in_blank') {
+        const studentAnswer = String(selectedAnswer ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const correctAnswer = String(question.correctAnswer ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+        isCorrect = studentAnswer === correctAnswer;
+      } else {
+        isCorrect = selectedAnswer === question.correctAnswer;
+      }
 
       const basePoints   = question.points || 10;
       const timeLimit    = question.timeLimit || 45;

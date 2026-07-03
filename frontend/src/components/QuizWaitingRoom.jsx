@@ -10,8 +10,8 @@ const QuizWaitingRoom = ({ session, onClose, socket }) => {
   useEffect(() => {
     if (!socket) return;
 
-    // Listen for other students joining
-    socket.on('participantJoined', (data) => {
+    // Listen for other students joining (backend emits 'student:joined')
+    socket.on('student:joined', (data) => {
       console.log('👤 New participant:', data);
       setParticipants(prev => {
         if (prev.find(p => p.userId === data.userId)) return prev;
@@ -30,8 +30,8 @@ const QuizWaitingRoom = ({ session, onClose, socket }) => {
     });
 
     return () => {
-      socket.off('participantJoined');
-      socket.off('quizBegan');
+      socket.off('student:joined');
+      socket.off('quiz:started');
     };
   }, [socket]);
 

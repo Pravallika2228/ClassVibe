@@ -54,12 +54,16 @@ const quizSessionSchema = new mongoose.Schema({
     },
     answers: [{
       questionIndex: Number,
-      selectedAnswer: Number,
+      selectedAnswer: mongoose.Schema.Types.Mixed, // Number for MC/TF, String for FIB, Number[] for multiple_select
       isCorrect: Boolean,
       points: Number,
       answeredAt: Date,
-      timeTaken: Number // seconds
+      timeTaken: Number
     }],
+    streak: {
+      type: Number,
+      default: 0
+    },
     completedAt: Date
   }],
   

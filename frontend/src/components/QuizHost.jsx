@@ -26,6 +26,9 @@ const QuizHost = ({ quiz, sessionId, onClose, onCreateAgain }) => {
   useEffect(() => {
     if (!socket.connected) socket.connect();
 
+    // Join the quiz session socket room so teacher receives all session events
+    socket.emit('teacher:joinSession', { sessionId });
+
     // ✅ CHANGED: was 'student:joined', backend was emitting 'participantJoined' — now both fixed
     // Backend now emits 'student:joined' with { userId, name } so real name shows up
     socket.on('student:joined', (data) => {
