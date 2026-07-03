@@ -65,13 +65,19 @@ const NotificationCenter = ({ onClose, onNotificationRead, onMarkAllRead }) => {
 
     console.log("📍 Notification clicked:", notification);
 
-    if (notification.type === 'quiz_started') {
+    if (notification.type === 'session_started') {
+      const groupId = notification.metadata?.groupId || notification.relatedGroup?._id || notification.relatedGroup;
+      if (groupId) {
+        window.dispatchEvent(new CustomEvent('joinSession', { detail: { groupId } }));
+      }
+      onClose();
+    } else if (notification.type === 'quiz_started') {
       const sessionId = notification.metadata?.sessionId;
       if (sessionId) {
         window.dispatchEvent(new CustomEvent('openWaitingRoom', { detail: { sessionId } }));
       }
       onClose();
-    } else if (notification.actionUrl && notification.actionUrl !== '/') {
+    } else {
       onClose();
     }
   };
@@ -147,9 +153,13 @@ const getNotificationIcon = (type) => {
     return then.toLocaleDateString();
   };
 
+  const dk   = document.body.classList.contains('dark-mode');
+  const nBg  = dk ? '#1e293b' : 'white';
+  const nBdr = dk ? '#334155' : '#e0e0e0';
+
   return (
     <div style={styles.overlay} onClick={onClose}>
-      <div style={styles.panel} onClick={(e) => e.stopPropagation()}>
+      <div style={{ ...styles.panel, backgroundColor: nBg }} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div style={styles.header}>
           <h3 style={styles.title}>Notifications</h3>
@@ -157,14 +167,14 @@ const getNotificationIcon = (type) => {
         </div>
 
         {/* Controls */}
-        <div style={styles.controls}>
+        <div style={{ ...styles.controls, backgroundColor: nBg, borderBottom: `1px solid ${nBdr}` }}>
           <div style={styles.filters}>
             <button
               onClick={() => setFilter('all')}
               style={{
                 ...styles.filterBtn,
-                backgroundColor: filter === 'all' ? '#075E54' : '#f0f0f0',
-                color: filter === 'all' ? 'white' : '#333'
+                backgroundColor: filter === 'all' ? '#075E54' : (dk?'#334155':'#f0f0f0'),
+                color: filter === 'all' ? 'white' : (dk?'#f1f5f9':'#333')
               }}
             >
               All
@@ -173,8 +183,8 @@ const getNotificationIcon = (type) => {
               onClick={() => setFilter('unread')}
               style={{
                 ...styles.filterBtn,
-                backgroundColor: filter === 'unread' ? '#075E54' : '#f0f0f0',
-                color: filter === 'unread' ? 'white' : '#333'
+                backgroundColor: filter === 'unread' ? '#075E54' : (dk?'#334155':'#f0f0f0'),
+                color: filter === 'unread' ? 'white' : (dk?'#f1f5f9':'#333')
               }}
             >
               Unread
@@ -192,7 +202,7 @@ const getNotificationIcon = (type) => {
         </div>
 
         {/* Notifications List */}
-        <div style={styles.list}>
+        <div style={{ ...styles.list, backgroundColor: nBg }}>
           {loading ? (
             <div style={styles.loading}>Loading...</div>
           ) : notifications.length === 0 ? (
@@ -233,6 +243,15 @@ const getNotificationIcon = (type) => {
                     <div style={styles.notificationGroup}>
                       📚 {notification.relatedGroup.groupName}
                     </div>
+                  )}
+                  {/* Join Now button for live session notifications */}
+                  {notification.type === 'session_started' && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleNotificationClick(notification); }}
+                      style={styles.joinNowBtn}
+                    >
+                      Join Now →
+                    </button>
                   )}
                 </div>
                 {!notification.isRead && (
@@ -408,6 +427,18 @@ const styles = {
     height: '8px',
     borderRadius: '50%',
     backgroundColor: '#25D366'
+  },
+  joinNowBtn: {
+    marginTop: '8px',
+    padding: '6px 14px',
+    backgroundColor: '#4F46E5',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: '700',
+    cursor: 'pointer',
+    display: 'inline-block'
   }
 };
 

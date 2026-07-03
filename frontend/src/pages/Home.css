@@ -108,6 +108,7 @@ main { padding-top: 120px; }
 }
 /*=======for sections========*/
 .section-title {
+  padding-top: 20px;
   text-align: center;
   font-size: 18px;
   font-weight: 800;

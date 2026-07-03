@@ -83,9 +83,7 @@ export default function StudentJoin({ onJoinSuccess, onBack }) {
       localStorage.setItem("token", token);
       if (user) localStorage.setItem("user", JSON.stringify(user));
 
-      setGuestMessageType("success");
-      setGuestMessage("Authenticated! Opening dashboard…");
-      setTimeout(() => onJoinSuccess(null, user, token), 600);
+      onJoinSuccess(null, user, token);
     } catch (err) {
       const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || "Authentication failed.";
       setGuestMessage(errMsg); setGuestMessageType("error");

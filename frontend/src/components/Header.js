@@ -44,6 +44,8 @@ const Header = ({
   // ── NEW optional prop ──
   group,               // full group object → group.pin, group.qrCode for built-in modal
                        // pass as: <Header group={currentGroup} ... />
+  isDark,              // global dark mode flag
+  onToggleTheme,       // theme toggle callback
 }) => {
 
   // ── Resolve user: prop → localStorage → null ────────────────────────────
@@ -102,16 +104,23 @@ const Header = ({
   };
 
   // ════════════════════════════════════════════════════════════════════════
+  // Compute theme-aware tokens
+  const dk    = isDark;
+  const hBg   = dk ? '#1e293b' : '#ffffff';
+  const hBdr  = dk ? '#334155' : '#e0e7ff';
+  const hTxt  = dk ? '#f1f5f9' : '#0f172a';
+  const hTxt2 = dk ? '#94a3b8' : '#64748b';
+
   return (
     <>
-      <header style={S.header}>
+      <header style={{ ...S.header, backgroundColor: hBg, borderBottom: `1px solid ${hBdr}`, boxShadow: dk ? '0 2px 8px rgba(0,0,0,0.3)' : '0 2px 8px rgba(99,102,241,0.08)' }}>
 
         {/* ═══ ROW 1 — BRAND BAR ═══════════════════════════════════════════
             Left:  ClassVibe wordmark (+ Back button when outside session)
             Right: User profile (name / role / avatar) — self-reads localStorage
                    + Bell + hamburger only when NOT in a session
         ═══════════════════════════════════════════════════════════════════ */}
-        <div style={S.brandRow}>
+        <div style={{ ...S.brandRow, backgroundColor: hBg }}>
 
           <div style={S.brandLeft}>
             <span style={S.logo}>ClassVibe</span>
@@ -126,10 +135,10 @@ const Header = ({
             {resolvedUser && (
               <div style={S.userProfile}>
                 <div style={S.userTextBlock} className="header-user-text">
-                  <span style={S.userName}>
+                  <span style={{ ...S.userName, color: hTxt }}>
                     {resolvedUser.name || resolvedUser.username || 'User'}
                   </span>
-                  <span style={S.userRoleLabel}>
+                  <span style={{ ...S.userRoleLabel, color: hTxt2 }}>
                     {resolvedUser.role || userRole || ''}
                   </span>
                 </div>
@@ -173,7 +182,7 @@ const Header = ({
             Student: 💬   | name | SESSION ACTIVE | View PIN      | 🔍 | 🔔 | ⋮
         ═══════════════════════════════════════════════════════════════════ */}
         {groupName && (
-          <div style={S.sessionBar}>
+          <div style={{ ...S.sessionBar, backgroundColor: hBg, borderBottom: `1px solid ${hBdr}` }}>
 
             {/* LEFT: session identity */}
             <div style={S.sessionLeft}>
@@ -181,9 +190,9 @@ const Header = ({
                 <>
                   <span style={S.liveBadge}>LIVE</span>
                   <div style={S.sessionInfo}>
-                    <span style={S.sessionName}>{groupName}</span>
+                    <span style={{ ...S.sessionName, color: hTxt }}>{groupName}</span>
                     {timeAgo && (
-                      <span style={S.sessionMeta}>Session started {timeAgo}</span>
+                      <span style={{ ...S.sessionMeta, color: hTxt2 }}>Session started {timeAgo}</span>
                     )}
                   </div>
                 </>
@@ -193,8 +202,8 @@ const Header = ({
                     <span style={{ fontSize: 15 }}>💬</span>
                   </div>
                   <div style={S.sessionInfo}>
-                    <span style={S.sessionName}>{groupName}</span>
-                    <span style={S.sessionMeta}>
+                    <span style={{ ...S.sessionName, color: hTxt }}>{groupName}</span>
+                    <span style={{ ...S.sessionMeta, color: hTxt2 }}>
                       SESSION ACTIVE
                       {participantCount ? ` • ${participantCount} PARTICIPANTS` : ''}
                     </span>
@@ -211,9 +220,9 @@ const Header = ({
                   Now: always shows. Clicking opens built-in modal OR calls onViewPin. */}
               <button
                 onClick={handleViewPin}
-                style={S.pinBtn}
-                onMouseEnter={e => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                onMouseLeave={e => e.currentTarget.style.backgroundColor = '#ffffff'}
+                style={{ ...S.pinBtn, backgroundColor: dk?'#1e293b':'#ffffff', color: dk?'#cbd5e1':'#374151', border: `1px solid ${dk?'#334155':'#e2e8f0'}` }}
+                onMouseEnter={e => e.currentTarget.style.backgroundColor = dk?'#334155':'#f8fafc'}
+                onMouseLeave={e => e.currentTarget.style.backgroundColor = dk?'#1e293b':'#ffffff'}
               >
                 {isTeacher ? 'View Session PIN & QR' : 'View Session PIN'}
               </button>
@@ -293,22 +302,22 @@ const Header = ({
       ══════════════════════════════════════════════════════════════════════ */}
       {showPinModal && (
         <div style={M.overlay} onClick={() => setShowPinModal(false)}>
-          <div style={M.card} onClick={e => e.stopPropagation()}>
+          <div style={{ ...M.card, backgroundColor: dk?'#1e293b':'white' }} onClick={e => e.stopPropagation()}>
 
             {/* Header */}
-            <div style={M.header}>
+            <div style={{ ...M.header, borderBottom: `1px solid ${dk?'#334155':'#f1f5f9'}` }}>
               <div>
-                <h2 style={M.title}>Session PIN & QR Code</h2>
-                <p style={M.subtitle}>{groupName}</p>
+                <h2 style={{ ...M.title, color: dk?'#f1f5f9':'#0f172a' }}>Session PIN & QR Code</h2>
+                <p style={{ ...M.subtitle, color: dk?'#94a3b8':'#64748b' }}>{groupName}</p>
               </div>
               <button onClick={() => setShowPinModal(false)} style={M.closeBtn}>✕</button>
             </div>
 
             {/* PIN display */}
-            <div style={M.pinSection}>
-              <p style={M.pinLabel}>SESSION PIN</p>
-              <div style={M.pinBox}>
-                <span style={M.pinNumber}>
+            <div style={{ ...M.pinSection, backgroundColor: dk?'#1e293b':undefined }}>
+              <p style={{ ...M.pinLabel, color: dk?'#64748b':'#94a3b8' }}>SESSION PIN</p>
+              <div style={{ ...M.pinBox, backgroundColor: dk?'#0f172a':'#f8fafc', borderColor: dk?'#334155':'#e2e8f0' }}>
+                <span style={{ ...M.pinNumber, color: dk?'#f1f5f9':'#0f172a' }}>
                   {group?.pin
                     ? String(group.pin).replace(/(\d{3})(\d{3})/, '$1-$2')
                     : '— —'}
@@ -322,7 +331,7 @@ const Header = ({
                   </button>
                 )}
               </div>
-              <p style={M.pinHint}>
+              <p style={{ ...M.pinHint, color: dk?'#94a3b8':'#64748b' }}>
                 Share this PIN with students to join the session
               </p>
             </div>
@@ -331,7 +340,7 @@ const Header = ({
             {group?.qrCode ? (
               <div style={M.qrSection}>
                 <p style={M.pinLabel}>QR CODE</p>
-                <div style={M.qrWrap}>
+                <div style={{ ...M.qrWrap, backgroundColor: dk?'#0f172a':'#f8fafc', borderColor: dk?'#334155':'#e2e8f0' }}>
                   <img
                     src={group.qrCode}
                     alt="Session QR Code"
@@ -371,7 +380,7 @@ const Header = ({
             )}
 
             {/* Footer */}
-            <div style={M.footer}>
+            <div style={{ ...M.footer, borderTop: `1px solid ${dk?'#334155':'#f1f5f9'}` }}>
               <button
                 onClick={() => setShowPinModal(false)}
                 style={M.doneBtn}
@@ -395,9 +404,6 @@ const S = {
     position: 'sticky',
     top: 0,
     zIndex: 1000,
-    backgroundColor: '#ffffff',
-    borderBottom: '1px solid #e0e7ff',
-    boxShadow: '0 2px 8px rgba(99,102,241,0.08)',
     boxSizing: 'border-box',
   },
 
@@ -412,17 +418,15 @@ const S = {
     boxSizing: 'border-box',
   },
   brandLeft:  { display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 },
-  logo:       { fontSize: 20, fontWeight: '800', color: '#4F46E5', letterSpacing: '-0.5px', userSelect: 'none', whiteSpace: 'nowrap' },
-  backBtn:    { padding: '5px 12px', fontSize: 13, fontWeight: '600', backgroundColor: '#f1f5f9', color: '#475569', border: '1px solid #e2e8f0', borderRadius: 6, cursor: 'pointer', flexShrink: 0 },
-  // flexShrink:1 (default) so the right side can compress; minWidth:0 allows overflow truncation
+  logo:       { fontSize: 20, fontWeight: '800', color: '#818cf8', letterSpacing: '-0.5px', userSelect: 'none', whiteSpace: 'nowrap' },
+  backBtn:    { padding: '5px 12px', fontSize: 13, fontWeight: '600', borderRadius: 6, cursor: 'pointer', flexShrink: 0 },
   brandRight: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 },
 
   // User profile (brand row right)
   userProfile:    { display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, overflow: 'hidden' },
-  // className="header-user-text" — hidden via CSS on mobile
   userTextBlock:  { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, minWidth: 0, overflow: 'hidden', maxWidth: 160 },
-  userName:       { fontSize: 13, fontWeight: '700', color: '#0f172a', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' },
-  userRoleLabel:  { fontSize: 11, color: '#64748b', textTransform: 'capitalize', whiteSpace: 'nowrap' },
+  userName:       { fontSize: 13, fontWeight: '700', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' },
+  userRoleLabel:  { fontSize: 11, textTransform: 'capitalize', whiteSpace: 'nowrap' },
   avatarWrap:     { position: 'relative', flexShrink: 0 },
   avatarImg:      { width: 36, height: 36, borderRadius: '50%', objectFit: 'cover', border: '2px solid #e2e8f0', display: 'block' },
   avatarFallback: { width: 36, height: 36, borderRadius: '50%', backgroundColor: '#6366f1', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: '700' },
@@ -449,20 +453,17 @@ const S = {
   liveBadge:   { display: 'inline-flex', alignItems: 'center', padding: '3px 8px', backgroundColor: '#22c55e', color: '#ffffff', borderRadius: 5, fontSize: 10, fontWeight: '800', letterSpacing: '0.8px', flexShrink: 0, lineHeight: 1.6 },
   chatIconBox: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#f1f5f9', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   sessionInfo: { display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, overflow: 'hidden' },
-  sessionName: { fontSize: 14, fontWeight: '700', color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  sessionMeta: { fontSize: 10, fontWeight: '600', color: '#64748b', letterSpacing: '0.3px', textTransform: 'uppercase' },
+  sessionName: { fontSize: 14, fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  sessionMeta: { fontSize: 10, fontWeight: '600', letterSpacing: '0.3px', textTransform: 'uppercase' },
 
   // Session right buttons
   sessionRight: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, flexWrap: 'wrap' },
   pinBtn: {
     padding: '7px 13px', fontSize: 12, fontWeight: '500',
-    backgroundColor: '#ffffff', color: '#374151',
-    border: '1px solid #e2e8f0', borderRadius: 7,
-    cursor: 'pointer', whiteSpace: 'nowrap', transition: 'background 0.15s',
+    borderRadius: 7, cursor: 'pointer', whiteSpace: 'nowrap', transition: 'background 0.15s',
   },
   analyticsBtn: {
     padding: '7px 13px', fontSize: 12, fontWeight: '500',
-    backgroundColor: '#ffffff', color: '#374151',
     border: '1px solid #e2e8f0', borderRadius: 7,
     cursor: 'pointer', whiteSpace: 'nowrap', transition: 'background 0.15s',
   },
@@ -556,7 +557,7 @@ const M = {
   },
 
   // Footer
-  footer: { padding: '14px 24px 20px', borderTop: '1px solid #f1f5f9' },
+  footer: { padding: '14px 24px 20px' },
   doneBtn: {
     width: '100%', padding: 12, fontSize: 14, fontWeight: '700',
     backgroundColor: '#6366f1', color: 'white',

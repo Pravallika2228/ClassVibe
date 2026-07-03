@@ -455,6 +455,28 @@ router.get('/group/:groupId/active', authenticateToken, async (req, res) => {
     res.status(500).json({ error: 'Failed to get active session' });
   }
 });
+// Batch quiz history for multiple groups — single query instead of N round-trips.
+// Usage: GET /api/quiz/batch-history?groupIds=id1,id2,id3
+router.get('/batch-history', authenticateToken, async (req, res) => {
+  try {
+    const { groupIds } = req.query;
+    if (!groupIds) return res.json({ sessions: [] });
+    const ids = groupIds.split(',').map(s => s.trim()).filter(Boolean);
+    if (!ids.length) return res.json({ sessions: [] });
+
+    const sessions = await QuizSession.find({ group: { $in: ids } })
+      .populate('quiz', 'title questions')
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .lean();
+
+    res.json({ sessions });
+  } catch (err) {
+    console.error('Batch quiz history error:', err);
+    res.status(500).json({ error: 'Failed to fetch quiz history' });
+  }
+});
+
 // Get quiz session history for a group
 router.get('/group/:groupId/history', authenticateToken, async (req, res) => {
   try {

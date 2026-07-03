@@ -114,17 +114,21 @@ const StudentAnalytics = ({ groupId, onClose }) => {
     );
   }
 
+  const dk    = document.body.classList.contains('dark-mode');
+  const aBg   = dk ? '#1e293b' : 'white';
+  const aTxt2 = dk ? '#94a3b8' : '#666';
+
   if (loading) {
     return (
       <div style={styles.overlay}>
-        <div style={styles.loading}>Loading analytics...</div>
+        <div style={{ ...styles.loading, backgroundColor: aBg, color: aTxt2 }}>Loading analytics...</div>
       </div>
     );
   }
 
   return (
     <div style={styles.overlay}>
-      <div style={styles.container}>
+      <div style={{ ...styles.container, backgroundColor: aBg }}>
         {/* Header */}
         <div style={styles.header}>
           <h2 style={styles.title}>📊 Student Analytics</h2>
@@ -138,7 +142,7 @@ const StudentAnalytics = ({ groupId, onClose }) => {
 
         {/* Summary Cards */}
         {summary && (
-          <div style={styles.summaryCards}>
+          <div style={{ ...styles.summaryCards, backgroundColor: aBg }}>
             <div style={styles.card}>
               <div style={styles.cardIcon}>👥</div>
               <div style={styles.cardContent}>

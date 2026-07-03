@@ -85,6 +85,101 @@ body {
 }
 
 /* ============================================
+   GLOBAL DARK MODE
+   body.dark-mode is applied by App.js via useEffect
+   ============================================ */
+
+/* ── Loading skeleton shimmer ──────────────────────────────────────────── */
+@keyframes cv-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.cv-skeleton {
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: cv-shimmer 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+body.dark-mode .cv-skeleton {
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+  animation: cv-shimmer 1.4s ease-in-out infinite;
+}
+
+body.dark-mode {
+  background-color: #0f172a;
+  color: #f1f5f9;
+}
+
+body.dark-mode .App,
+body.dark-mode .main-content {
+  background-color: #0f172a;
+}
+
+/* Inputs / forms inside dark mode */
+body.dark-mode input:not([type="file"]),
+body.dark-mode textarea,
+body.dark-mode select {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-color: #334155 !important;
+}
+
+body.dark-mode input::placeholder,
+body.dark-mode textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* ── IMAGE 1: Chat area background ── */
+body.dark-mode .main-content {
+  background-color: #0f172a !important;
+}
+
+/* Chat area messages container */
+body.dark-mode [class*="chatArea"],
+body.dark-mode [class*="messages"],
+body.dark-mode [class*="ChatArea"] {
+  background-color: #0f172a !important;
+}
+
+/* ── IMAGE 3: Schedule Session modal form + preview panel ── */
+body.dark-mode [class*="ScheduleSession"] [class*="preview"],
+body.dark-mode [class*="previewCol"],
+body.dark-mode [class*="previewCard"],
+body.dark-mode [class*="formCol"] {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+}
+
+/* Target by background pattern since ScheduleSession uses inline styles */
+/* Inline style overrides using attribute selectors won't work; use CSS class targeting */
+
+/* Sidebar leave/logout hover states keep their red */
+body.dark-mode .sidebar-leave-btn:hover {
+  background-color: #450a0a !important;
+  border-color: #ef4444 !important;
+}
+
+/* ── NotificationCenter dark mode ── */
+body.dark-mode [class*="notification"],
+body.dark-mode [class*="Notification"] {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-color: #334155 !important;
+}
+
+/* ── StudentAnalytics dark mode cards/list ── */
+body.dark-mode [class*="Analytics"] {
+  background-color: #1e293b !important;
+}
+
+/* ── ScheduleSession: target formCol and twoCol backgrounds ── */
+body.dark-mode .schedule-form-area {
+  background-color: #1e293b !important;
+  color: #f1f5f9 !important;
+}
+
+/* ============================================
    HEADER — full width enforced via flex stretch
    ============================================ */
 
@@ -114,6 +209,13 @@ header {
 .sidebar-leave-btn:hover {
   background-color: #FEE2E2 !important;
   border-color: #F87171 !important;
+}
+
+.teacher-logout-btn:hover {
+  background-color: #FEE2E2 !important;
+  border-color: #EF4444 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(220, 38, 38, 0.2);
 }
 
 .sidebar-logout-btn:hover {

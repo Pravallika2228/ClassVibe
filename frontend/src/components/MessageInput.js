@@ -179,8 +179,9 @@ const MessageInput = ({
   // ════════════════════════════════════════════════════════════════════════
   //  RENDER
   // ════════════════════════════════════════════════════════════════════════
+  const isDarkMode = document.body.classList.contains('dark-mode');
   return (
-    <div style={S.container}>
+    <div style={{ ...S.container, backgroundColor: isDarkMode?'#1e293b':'#ffffff', borderTop: isDarkMode?'1px solid #334155':'1px solid #e2e8f0' }}>
 
       {/* Hidden file input */}
       <input ref={fileInputRef} type="file" style={{ display: 'none' }} onChange={handleFileSelect} />
@@ -197,9 +198,9 @@ const MessageInput = ({
 
       {/* ── Private message banner ── */}
       {selectedRecipient && (
-        <div style={S.recipientBanner}>
-          <span style={S.recipientText}>
-            Private message to: <strong>{selectedRecipient.username}</strong>
+        <div style={{ ...S.recipientBanner, backgroundColor: document.body.classList.contains('dark-mode')?'#1e3a5f':'#eef2ff', borderColor: document.body.classList.contains('dark-mode')?'#3730a3':'#c7d2fe' }}>
+          <span style={{ ...S.recipientText, color: document.body.classList.contains('dark-mode')?'#a5b4fc':'#4f46e5' }}>
+            Private message to: <strong>{selectedRecipient.username || selectedRecipient.name || 'User'}</strong>
           </span>
           <button onClick={() => setSelectedRecipient(null)} style={S.clearRecipient}>✕</button>
         </div>

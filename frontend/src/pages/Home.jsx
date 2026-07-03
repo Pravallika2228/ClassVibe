@@ -9,9 +9,10 @@ export default function Home({ onTeacher, onStudent }) {
     localStorage.getItem("theme") === "dark"
   );
   useEffect(() => {
-    localStorage.setItem(
-      "theme",
-      darkMode ? "dark" : "light"
+    localStorage.setItem("theme", darkMode ? "dark" : "light");
+    // Notify App.js so the authenticated dashboard immediately syncs
+    window.dispatchEvent(
+      new CustomEvent("classvibe-theme", { detail: darkMode })
     );
   }, [darkMode]);
   return (

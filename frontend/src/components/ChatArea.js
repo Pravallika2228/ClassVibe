@@ -146,9 +146,16 @@ const ChatArea = ({
     return c[(u?.charCodeAt(0) || 0) % c.length];
   };
 
-  const ownBubbleColor = userRole === 'teacher'
-    ? { bg: '#eef2ff', border: '#c7d2fe', tick: '#6366f1' }
-    : { bg: '#f0fdf4', border: '#bbf7d0', tick: '#10b981' };
+  // Defined here so it's available throughout the component
+  const isDark = document.body.classList.contains('dark-mode');
+
+  const ownBubbleColor = isDark
+    ? (userRole === 'teacher'
+        ? { bg: '#1e3a5f', border: '#3730a3', tick: '#818cf8' }
+        : { bg: '#064e3b', border: '#065f46', tick: '#34d399' })
+    : (userRole === 'teacher'
+        ? { bg: '#eef2ff', border: '#c7d2fe', tick: '#6366f1' }
+        : { bg: '#f0fdf4', border: '#bbf7d0', tick: '#10b981' });
 
   // ── Context menu ──────────────────────────────────────────────────────────
   const handleContextMenu = (e, msg) => {
@@ -322,9 +329,9 @@ const ChatArea = ({
 
     if (lbCollapsed) {
       return (
-        <div style={LB.arrowRow}>
+        <div style={{ ...LB.arrowRow, backgroundColor: isDark?'#0f172a':'#f8fafc', borderBottom: isDark?'1px solid #334155':'1px solid #e2e8f0' }}>
           <button
-            style={LB.arrowBtn}
+            style={{ ...LB.arrowBtn, color: isDark?'#94a3b8':'#64748b', borderColor: isDark?'#334155':'#cbd5e1' }}
             onClick={() => setLbCollapsed(false)}
             title="Show leaderboard"
           >
@@ -410,7 +417,7 @@ const ChatArea = ({
       {message.messageType === 'poll' && !message.isDeleted && renderPoll(message)}
       {message.messageType === 'file' && !message.isDeleted && renderFile(message)}
       {message.content && message.messageType !== 'poll' && message.messageType !== 'quiz_started' && message.messageType !== 'quiz_ended' && (
-        <div style={S.msgText}>{message.isDeleted ? '🚫 This message was deleted' : message.content}</div>
+        <div style={{ ...S.msgText, color: isDark ? '#e2e8f0' : '#1e293b' }}>{message.isDeleted ? '🚫 This message was deleted' : message.content}</div>
       )}
     </>
   );
@@ -419,7 +426,7 @@ const ChatArea = ({
   //  RENDER
   // ════════════════════════════════════════════════════════════════════════
   return (
-    <div style={S.chatArea}>
+    <div style={{ ...S.chatArea, backgroundColor: isDark ? '#0f172a' : S.chatArea.backgroundColor }}>
 
       {/* ── Leaderboard (arrow or expanded bar) ── */}
       {renderLeaderboard()}
@@ -465,8 +472,11 @@ const ChatArea = ({
                 {/* Own message — RIGHT */}
                 {!isSys && isOwn && (
                   <div style={S.ownRow}>
-                    <div style={{ ...S.bubble, backgroundColor: message.isDeleted ? '#f1f5f9' : ownBubbleColor.bg, borderColor: message.isDeleted ? '#e2e8f0' : ownBubbleColor.border, borderRadius: '12px 3px 12px 12px', opacity: message.isDeleted ? 0.65 : 1 }}>
-                      {editing ? renderEditUI() : renderContent(message)}
+                    {/* Column: bubble + time row below (time outside bubble) */}
+                    <div style={S.ownCol}>
+                      <div style={{ ...S.bubble, backgroundColor: message.isDeleted ? (isDark?'#1e293b':'#f1f5f9') : ownBubbleColor.bg, borderColor: message.isDeleted ? (isDark?'#334155':'#e2e8f0') : ownBubbleColor.border, borderRadius: '12px 3px 12px 12px', opacity: message.isDeleted ? 0.65 : 1 }}>
+                        {editing ? renderEditUI() : renderContent(message)}
+                      </div>
                       {!editing && (
                         <div style={S.ownFooter}>
                           {message.isEdited && !message.isDeleted && <span style={{ fontSize: 10, color: '#94a3b8', fontStyle: 'italic' }}>(edited)</span>}
@@ -489,7 +499,7 @@ const ChatArea = ({
                     </div>
                     <div style={S.otherCol}>
                       {renderMeta(message)}
-                      <div style={{ ...S.bubble, backgroundColor: message.isDeleted ? '#f1f5f9' : '#ffffff', borderColor: '#e2e8f0', borderRadius: '3px 12px 12px 12px', opacity: message.isDeleted ? 0.65 : 1 }}>
+                      <div style={{ ...S.bubble, backgroundColor: message.isDeleted ? (isDark?'#1e293b':'#f1f5f9') : (isDark?'#1e3a5f':'#ffffff'), borderColor: isDark?'#334155':'#e2e8f0', borderRadius: '3px 12px 12px 12px', opacity: message.isDeleted ? 0.65 : 1 }}>
                         {editing ? renderEditUI() : renderContent(message)}
                       </div>
                     </div>
@@ -520,14 +530,14 @@ const ChatArea = ({
           Toggled by window event 'toggleChatSearch' dispatched from Header.js
       ══════════════════════════════════════════════════════════════════ */}
       {showSearch && (
-        <div style={S.searchOverlay}>
+        <div style={{ ...S.searchOverlay, backgroundColor: isDark?'rgba(15,23,42,0.97)':'rgba(255,255,255,0.97)', borderBottom: isDark?'1px solid #334155':'1px solid #e2e8f0' }}>
           <span style={{ fontSize: 14, opacity: 0.5, flexShrink: 0 }}>🔍</span>
           <input
             type="text"
             placeholder="Search messages..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            style={S.searchInput}
+            style={{ ...S.searchInput, color: isDark?'#f1f5f9':'#1e293b' }}
             autoFocus
             onKeyDown={e => {
               if (e.key === 'Escape') { setShowSearch(false); setSearchQuery(''); }
@@ -613,7 +623,7 @@ const ChatArea = ({
 //  LEADERBOARD STYLES
 // ══════════════════════════════════════════════════════════════════════════
 const LB = {
-  arrowRow: { display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '4px 0 2px', backgroundColor: '#f8fafc', borderBottom: '1px solid #e2e8f0', flexShrink: 0 },
+  arrowRow: { display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '4px 0 2px', flexShrink: 0 },
   arrowBtn: { background: 'none', border: '1px solid #cbd5e1', borderRadius: 4, padding: '2px 22px', cursor: 'pointer', color: '#64748b', fontSize: 12, lineHeight: 1.6 },
   bar:        { backgroundColor: '#0f172a', borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 },
   headerRow:  { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', minHeight: 42 },
@@ -665,6 +675,7 @@ const S = {
   msgRow:       { display: 'flex', width: '100%', marginBottom: 8 },
   sysMsg:       { padding: '5px 16px', backgroundColor: '#e2e8f0', color: '#475569', borderRadius: 20, fontSize: 12, fontStyle: 'italic', textAlign: 'center', margin: '0 auto', maxWidth: '70%' },
   ownRow:       { display: 'flex', alignItems: 'flex-end', gap: 8, maxWidth: '70%' },
+  ownCol:       { display: 'flex', flexDirection: 'column', gap: 3 },
   otherRow:     { display: 'flex', alignItems: 'flex-start', gap: 10, maxWidth: '70%' },
   otherCol:     { display: 'flex', flexDirection: 'column', gap: 3, flex: 1 },
   avatar:       { width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 11, fontWeight: '700' },
@@ -674,7 +685,7 @@ const S = {
   metaTime:     { fontSize: 11, color: '#94a3b8' },
   editedLabel:  { fontSize: 11, color: '#94a3b8', fontStyle: 'italic' },
   bubble:       { padding: '10px 13px', border: '1px solid', wordWrap: 'break-word', position: 'relative', boxShadow: '0 1px 4px rgba(0,0,0,0.05)', maxWidth: '100%' },
-  ownFooter:    { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginTop: 5 },
+  ownFooter:    { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4, paddingRight: 2 },
   ownTime:      { fontSize: 11, color: '#94a3b8' },
   readTick:     { fontSize: 11 },
   editInput:    { width: '100%', padding: '7px 10px', fontSize: 14, border: '1px solid #c7d2fe', borderRadius: 6, outline: 'none', backgroundColor: '#fff', boxSizing: 'border-box' },

@@ -18,7 +18,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
 // ─── inline Settings component ──────────────────────────────────────────────
-const Settings = ({ onClose, onUserUpdated }) => {
+const Settings = ({ onClose, onUserUpdated, isDark }) => {
   const [user,         setUser]         = useState(null);
   const [username,     setUsername]     = useState('');
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -72,17 +72,25 @@ const Settings = ({ onClose, onUserUpdated }) => {
 
   const initials = (name) => (name || '??').substring(0, 2).toUpperCase();
 
+  const dk = isDark;
+  const mBg   = dk ? '#1e293b' : 'white';
+  const mBdr  = dk ? '#334155' : '#e2e8f0';
+  const mTxt  = dk ? '#f1f5f9' : '#0f172a';
+  const mTxt2 = dk ? '#94a3b8' : '#374151';
+  const mInp  = dk ? '#0f172a' : 'white';
+  const mInpRo= dk ? '#0a111f' : '#f8fafc';
+
   return (
     <div style={ST.overlay}>
-      <div style={ST.modal}>
+      <div style={{ ...ST.modal, backgroundColor: mBg }}>
         {/* Header */}
-        <div style={ST.header}>
-          <h2 style={ST.title}>⚙️ Profile Settings</h2>
+        <div style={{ ...ST.header, borderBottom: `1px solid ${mBdr}` }}>
+          <h2 style={{ ...ST.title, color: mTxt }}>⚙️ Profile Settings</h2>
           <button onClick={onClose} style={ST.closeBtn}>✕</button>
         </div>
 
         {/* Body */}
-        <div style={ST.body}>
+        <div style={{ ...ST.body, backgroundColor: mBg }}>
           {/* ── Profile photo ── */}
           <div style={ST.photoSection}>
             <div style={ST.photoWrapper}>
@@ -106,29 +114,29 @@ const Settings = ({ onClose, onUserUpdated }) => {
           {/* ── Username (editable) ── */}
           <div style={ST.field}>
             <div style={ST.labelRow}>
-              <label style={ST.label}>Username</label>
+              <label style={{ ...ST.label, color: mTxt2 }}>Username</label>
               <span style={ST.editablePill}>Editable</span>
             </div>
-            <input style={ST.input} value={username} onChange={e => setUsername(e.target.value)} placeholder="Enter username" maxLength={50} />
+            <input style={{ ...ST.input, backgroundColor: mInp, color: mTxt, borderColor: mBdr }} value={username} onChange={e => setUsername(e.target.value)} placeholder="Enter username" maxLength={50} />
           </div>
 
           {/* ── Email (readonly) ── */}
           <div style={ST.field}>
             <div style={ST.labelRow}>
-              <label style={ST.label}>Email</label>
+              <label style={{ ...ST.label, color: mTxt2 }}>Email</label>
               <span style={ST.readonlyPill}>Read only</span>
             </div>
-            <input style={{ ...ST.input, ...ST.readonlyInput }} value={user?.email || '—'} readOnly />
+            <input style={{ ...ST.input, ...ST.readonlyInput, backgroundColor: mInpRo, color: dk?'#64748b':'#94a3b8', borderColor: mBdr }} value={user?.email || '—'} readOnly />
             <p style={ST.hint}>Email is set at registration and cannot be changed here.</p>
           </div>
 
           {/* ── Password (readonly) ── */}
           <div style={ST.field}>
             <div style={ST.labelRow}>
-              <label style={ST.label}>Password</label>
+              <label style={{ ...ST.label, color: mTxt2 }}>Password</label>
               <span style={ST.readonlyPill}>Read only</span>
             </div>
-            <input style={{ ...ST.input, ...ST.readonlyInput }} value="••••••••••••" readOnly />
+            <input style={{ ...ST.input, ...ST.readonlyInput, backgroundColor: mInpRo, color: dk?'#64748b':'#94a3b8', borderColor: mBdr }} value="••••••••••••" readOnly />
             <p style={ST.hint}>To change your password, use the password-reset flow on the login page.</p>
           </div>
 
@@ -141,8 +149,8 @@ const Settings = ({ onClose, onUserUpdated }) => {
         </div>
 
         {/* Footer */}
-        <div style={ST.footer}>
-          <button onClick={onClose}  style={ST.cancelBtn}>Cancel</button>
+        <div style={{ ...ST.footer, borderTop: `1px solid ${mBdr}`, backgroundColor: mBg }}>
+          <button onClick={onClose} style={{ ...ST.cancelBtn, backgroundColor: dk?'#334155':'#f1f5f9', color: dk?'#f1f5f9':'#475569' }}>Cancel</button>
           <button onClick={handleSave} style={ST.saveBtn} disabled={saving}>
             {saving ? 'Saving…' : 'Save Changes'}
           </button>
@@ -376,10 +384,9 @@ const Sidebar = ({
   onDashboard,
   onLiveSession,
   onUserUpdated,  // called with updated user object after profile save
+  isDark,
+  onToggleTheme,
 }) => {
-  const [expandedSection,  setExpandedSection]  = useState(null);
-  const [error,            setError]            = useState('');
-  const [success,          setSuccess]          = useState('');
   const [activeNavItem,    setActiveNavItem]    = useState('Dashboard');
   const [showSettings,     setShowSettings]     = useState(false);
   const [showWhiteboard,   setShowWhiteboard]   = useState(false);
@@ -389,31 +396,6 @@ const Sidebar = ({
   };
   const currentUser  = getCurrentUser();
   const resolvedRole = userRole || currentUser?.role || 'student';
-
-  const isAdmin = (() => {
-    if (!group || !currentUser) return false;
-    const adminId = group.admin?._id ?? group.admin?.id ?? group.admin;
-    const userId  = currentUser._id ?? currentUser.id ?? currentUser.userId;
-    return String(adminId) === String(userId);
-  })();
-
-  // Message counts per sender (teacher only usage)
-  const messageCounts = (() => {
-    const counts = {};
-    messages.forEach(m => { if (m.sender?._id) counts[m.sender._id] = (counts[m.sender._id] || 0) + 1; });
-    return counts;
-  })();
-
-  const toggleSection = (s) => { setExpandedSection(p => p === s ? null : s); setError(''); setSuccess(''); };
-
-  const copyText = async (text) => {
-    try { await navigator.clipboard.writeText(text || ''); setSuccess('Copied!'); setTimeout(() => setSuccess(''), 1800); }
-    catch { setError('Unable to copy'); setTimeout(() => setError(''), 1800); }
-  };
-  const openQrInNewTab = (qr) => {
-    if (!qr) return;
-    const w = window.open(); w.document.write(`<img src="${qr}" style="max-width:100%"/>`); w.document.title = 'QR Code';
-  };
 
   // Engagement (teacher)
   const engagementScore = (() => {
@@ -463,16 +445,27 @@ const Sidebar = ({
   // ════════════════════════════════════════════════════════════════════════
   return (
     <>
-      {showSettings   && <Settings   onClose={() => setShowSettings(false)} onUserUpdated={onUserUpdated} />}
+      {showSettings   && <Settings   onClose={() => setShowSettings(false)} onUserUpdated={onUserUpdated} isDark={isDark} />}
       {showWhiteboard && <Whiteboard onClose={() => setShowWhiteboard(false)} />}
 
       {isOpen && <div style={styles.backdrop} onClick={onClose} />}
-      <div style={{ ...styles.sidebar, right: isOpen ? '0' : '-100vw' }}>
+      <div style={{ ...styles.sidebar, right: isOpen ? '0' : '-100vw',
+        backgroundColor: isDark ? '#1e293b' : 'white',
+        borderLeft: isDark ? '1px solid #334155' : '1px solid rgba(0,0,0,0.1)',
+      }}>
 
         {/* ── HEADER ── */}
-        <div style={styles.sidebarHeader}>
-          <span style={styles.headerLabel}>Menu</span>
-          <button onClick={onClose} style={styles.closeButton}>✕</button>
+        <div style={{ ...styles.sidebarHeader, backgroundColor: isDark ? '#0f172a' : '#f9fafb', borderBottom: isDark ? '1px solid #334155' : '1px solid #e5e7eb' }}>
+          <span style={{ ...styles.headerLabel, color: isDark ? '#64748b' : '#9ca3af' }}>Menu</span>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            {onToggleTheme && (
+              <button onClick={onToggleTheme} title="Toggle dark/light mode"
+                style={{ background:'none', border:'none', cursor:'pointer', fontSize:18, padding:'2px 4px', color: isDark ? '#94a3b8' : '#6b7280' }}>
+                {isDark ? '☀️' : '🌙'}
+              </button>
+            )}
+            <button onClick={onClose} style={{ ...styles.closeButton, color: isDark ? '#94a3b8' : '#6b7280' }}>✕</button>
+          </div>
         </div>
 
         {/* ── SCROLLABLE BODY ── */}
@@ -487,8 +480,12 @@ const Sidebar = ({
                     key={i}
                     style={{
                       ...styles.navItem,
-                      backgroundColor: activeNavItem === item.label ? '#EEF2FF' : 'transparent',
-                      color:           activeNavItem === item.label ? '#4F46E5' : '#374151',
+                      backgroundColor: activeNavItem === item.label
+                        ? (isDark ? '#1e3a5f' : '#EEF2FF')
+                        : 'transparent',
+                      color: activeNavItem === item.label
+                        ? (isDark ? '#818cf8' : '#4F46E5')
+                        : (isDark ? '#cbd5e1' : '#374151'),
                     }}
                     onClick={() => handleNavClick(item.label)}
                   >
@@ -538,12 +535,12 @@ const Sidebar = ({
 
               {/* ── LIVE REACTIONS — teacher only ── */}
               {resolvedRole === 'teacher' && (
-                <div style={styles.engagementPanel}>
+                <div style={{ ...styles.engagementPanel, backgroundColor: isDark?'#0f172a':'#fafafa', borderBottom: isDark?'1px solid #334155':'1px solid #f3f4f6' }}>
                   <div style={styles.engagementTitle}>LIVE REACTIONS</div>
                   <div style={styles.engagementContent}>
                     <span style={styles.engagementIcon}>⚡</span>
                     <div>
-                      <div style={styles.engagementScore}>{engagementScore}%</div>
+                      <div style={{ ...styles.engagementScore, color: isDark?'#f1f5f9':'#111827' }}>{engagementScore}%</div>
                       <div style={styles.engagementLabel}>Engagement</div>
                     </div>
                   </div>
@@ -557,120 +554,12 @@ const Sidebar = ({
             </>
           )}
 
-          {/* ── SESSION TOOLS — teacher only ── */}
-          {resolvedRole === 'teacher' && (
-            <>
-              <div style={styles.sectionsTitle}>Session Tools</div>
-
-              {/* Share PIN & QR */}
-              <div style={styles.section}>
-                <div style={styles.sectionHeader} onClick={() => toggleSection('rejoin')}>
-                  <span style={styles.sectionTitle}>🔗 {isAdmin ? 'Share PIN & QR' : 'Session PIN'}</span>
-                  <span style={styles.arrow}>{expandedSection === 'rejoin' ? '▼' : '▶'}</span>
-                </div>
-                {expandedSection === 'rejoin' && (
-                  <div style={styles.sectionContent}>
-                    {group ? (
-                      <>
-                        <p style={styles.description}>Share the classroom PIN / QR code with students.</p>
-                        <div style={styles.qrSection}>
-                          {group.qrCode ? (
-                            <>
-                              <img src={group.qrCode} alt="QR Code" style={styles.qrCode} />
-                              <div style={{ marginTop: 8, display:'flex', gap:6, justifyContent:'center', flexWrap:'wrap' }}>
-                                <button style={styles.smallBtn} onClick={() => copyText(group.pin)}>Copy PIN</button>
-                                <button style={styles.smallBtn} onClick={() => copyText(group.qrCode)}>Copy QR</button>
-                                <button style={styles.smallBtn} onClick={() => openQrInNewTab(group.qrCode)}>Open QR</button>
-                              </div>
-                            </>
-                          ) : <p style={{ color:'#94a3b8', textAlign:'center' }}>No QR code generated yet.</p>}
-                          <p style={styles.pinDisplay}>PIN: {group?.pin ?? '—'}</p>
-                        </div>
-                      </>
-                    ) : <p style={styles.noUsers}>No session active</p>}
-                    {error   && <div style={styles.errorText}>{error}</div>}
-                    {success && <div style={styles.successText}>{success}</div>}
-                  </div>
-                )}
-              </div>
-
-              {/* Active Students */}
-              <div style={styles.section}>
-                <div style={styles.sectionHeader} onClick={() => toggleSection('activeUsers')}>
-                  <span style={styles.sectionTitle}>👤 Active Students</span>
-                  <span style={styles.arrow}>{expandedSection === 'activeUsers' ? '▼' : '▶'}</span>
-                </div>
-                {expandedSection === 'activeUsers' && (
-                  <div style={styles.sectionContent}>
-                    {group?.onlineUsers?.length > 0 ? (
-                      <>
-                        <p style={styles.description}>Students who have sent at least one message</p>
-                        {(() => {
-                          const teacherId = group.admin?._id || group.admin?.id || group.admin;
-                          const active = group.onlineUsers.filter(u => {
-                            const uid = u._id || u.id;
-                            return String(uid) !== String(teacherId) && (messageCounts[uid] || 0) > 0;
-                          });
-                          if (!active.length) return <p style={styles.noUsers}>No active students yet.</p>;
-                          return (
-                            <div style={styles.activeUsersList}>
-                              {active.map(u => {
-                                const uid  = u._id || u.id;
-                                const name = u.username || u.name || 'Unknown';
-                                const cnt  = messageCounts[uid] || 0;
-                                return (
-                                  <div key={uid} style={styles.activeUserItem}>
-                                    <div style={styles.activeUserLeft}>
-                                      <div style={styles.activeStatusDot} />
-                                      <span style={styles.activeUserName}>{name}</span>
-                                    </div>
-                                    <span style={styles.messageCount}>{cnt} {cnt === 1 ? 'msg' : 'msgs'}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        })()}
-                      </>
-                    ) : <p style={styles.noUsers}>No users online</p>}
-                  </div>
-                )}
-              </div>
-
-              {/* Statistics */}
-              <div style={styles.section}>
-                <div style={styles.sectionHeader} onClick={() => toggleSection('stats')}>
-                  <span style={styles.sectionTitle}>📊 Statistics</span>
-                  <span style={styles.arrow}>{expandedSection === 'stats' ? '▼' : '▶'}</span>
-                </div>
-                {expandedSection === 'stats' && (
-                  <div style={styles.sectionContent}>
-                    {[
-                      { label: 'Total Messages:', value: messages?.length || 0 },
-                      { label: 'Online Members:', value: group?.onlineUsers?.length || 0 },
-                      { label: 'Total Members:',  value: group?.members?.length || 0 },
-                    ].map((s, i) => (
-                      <div key={i} style={styles.statItem}>
-                        <span style={styles.statLabel}>{s.label}</span>
-                        <span style={styles.statValue}>{s.value}</span>
-                      </div>
-                    ))}
-                    {group?.createdAt && (
-                      <div style={styles.statItem}>
-                        <span style={styles.statLabel}>Session Started:</span>
-                        <span style={styles.statValue}>{new Date(group.createdAt).toLocaleDateString()}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+          {/* Session Tools removed — teacher uses Dashboard Analytics page instead */}
 
         </div>{/* end scrollContent */}
 
         {/* ── BOTTOM BAR — always visible, fixed at bottom ── */}
-        <div style={styles.bottomBar}>
+        <div style={{ ...styles.bottomBar, backgroundColor: isDark?'#1e293b':'white', borderTop: isDark?'2px solid #334155':'2px solid #e5e7eb' }}>
           {group && resolvedRole === 'student' && onLeaveMeeting && (
             <button className="sidebar-leave-btn" style={styles.leaveSessionBtn} onClick={() => { onClose(); onLeaveMeeting(); }}>
               → Leave session
@@ -730,7 +619,7 @@ const styles = {
   engagementTitle:   { fontSize:'10px', fontWeight:'700', color:'#9ca3af', letterSpacing:'1px', marginBottom:'8px' },
   engagementContent: { display:'flex', alignItems:'center', gap:'12px', marginBottom:'8px' },
   engagementIcon:    { fontSize:'28px' },
-  engagementScore:   { fontSize:'24px', fontWeight:'800', color:'#111827' },
+  engagementScore:   { fontSize:'24px', fontWeight:'800' },
   engagementLabel:   { fontSize:'11px', color:'#6b7280' },
   engagementBar:     { height:'4px', backgroundColor:'#e5e7eb', borderRadius:'2px', overflow:'hidden' },
   engagementFill:    { height:'100%', backgroundColor:'#4F46E5', borderRadius:'2px', transition:'width 0.5s' },

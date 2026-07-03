@@ -109,23 +109,35 @@ export default function TeacherLogin({ onAuthSuccess, onBack }) {
     if (!isValidEmail(email.trim()))       { setMessage("Invalid email id"); return; }
 
     setLoading(true);
-    try {
+    const attemptLogin = async () => {
       const loginResp = await login(email.trim(), password);
-      let { token, user } = extractAuth(loginResp);
+      const { token, user } = extractAuth(loginResp);
       if (!token) throw new Error("Authentication failed (no token).");
-
       await finishAuth(user, token);
       await waitForSocketAuth(3000);
-
       setMessageType("success"); setMessage("Signed in! Loading dashboard...");
-
-      setTimeout(() => {
-        const savedUser = JSON.parse(localStorage.getItem("user") || "null");
-        onAuthSuccess && onAuthSuccess(savedUser ?? user, token);
-      }, 400);
+      const savedUser = JSON.parse(localStorage.getItem("user") || "null");
+      onAuthSuccess && onAuthSuccess(savedUser ?? user, token);
+    };
+    try {
+      await attemptLogin();
     } catch (err) {
-      const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || "Failed to sign in";
-      setMessage(errMsg); setMessageType("error");
+      // Network error = Render cold start. Wait 12s and retry once automatically.
+      const isNetworkErr = !err.response;
+      if (isNetworkErr) {
+        setMessageType("error");
+        setMessage("Server is starting up (Render free tier). Retrying in 12 seconds…");
+        await new Promise(r => setTimeout(r, 12000));
+        try {
+          await attemptLogin();
+        } catch (retryErr) {
+          const retryMsg = retryErr?.response?.data?.error || retryErr?.response?.data?.message || "Server took too long. Please try again.";
+          setMessage(retryMsg); setMessageType("error");
+        }
+      } else {
+        const errMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || "Failed to sign in";
+        setMessage(errMsg); setMessageType("error");
+      }
     } finally { setLoading(false); }
   };
 

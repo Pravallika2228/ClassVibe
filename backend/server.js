@@ -857,17 +857,16 @@ app.get('/api/groups/my-groups', authenticateToken, async (req, res) => {
     })
     .populate('admin', 'username name')
     .populate('members.user', 'username name isOnline')
-    .sort({ createdAt: -1 });
-    
+    .sort({ createdAt: -1 })
+    .lean(); // skip Mongoose document wrapper overhead — this endpoint is read-only
+
     const groupsWithJoinedAt = groups.map(group => {
-      const groupObj = group.toObject();
-      
-      const currentUserMember = groupObj.members.find(m => 
-        m.user._id.toString() === req.userId.toString()
+      // With .lean() group is already a plain object — no .toObject() needed
+      const currentUserMember = group.members.find(m =>
+        m.user && m.user._id && m.user._id.toString() === req.userId.toString()
       );
-      
       return {
-        ...groupObj,
+        ...group,
         userJoinedAt: currentUserMember ? currentUserMember.joinedAt : null
       };
     });

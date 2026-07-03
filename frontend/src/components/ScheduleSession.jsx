@@ -206,19 +206,35 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
   // ─────────────────────────────────────────
   // RENDER — layout identical to previous version
   // ─────────────────────────────────────────
+  const dk = document.body.classList.contains('dark-mode');
+  const sBg   = dk ? '#1e293b' : '#fff';
+  const sBdr  = dk ? '#334155' : '#e5e7eb';
+  const sTxt  = dk ? '#f1f5f9' : '#111827';
+  const sTxt2 = dk ? '#94a3b8' : '#6b7280';
+  const sCard  = dk ? '#0f172a' : '#fafafa';
+  // Pre-computed dark overrides to apply inline throughout JSX
+  const oST   = { color: sTxt };                               // sectionTitle
+  const oSub  = { color: sTxt2 };                              // sectionSub
+  const oLbl  = { color: dk?'#e2e8f0':'#374151' };            // label
+  const oDvd  = { borderTop: `1px solid ${sBdr}` };           // divider
+  const oAccB = { background: dk?'#1e293b':'white', border: `2px solid ${sBdr}`, color: sTxt };  // accessBtn
+  const oAccA = { background: dk?'#1e3a5f':'#EEF2FF', border: `2px solid #6366f1` };            // accessBtnActive
+  const oPriv = { backgroundColor: dk?'#0a111f':'#f8fafc', border: `1px solid ${sBdr}` };      // privateSection
+  const oPST  = { color: dk?'#e2e8f0':'#374151' };            // privateSectionTitle
+
   return (
     <div style={S.overlay}>
-      <div style={S.modal}>
+      <div style={{ ...S.modal, backgroundColor: sBg }}>
 
-        {/* HEADER */}
-        <div style={S.header}>
-          <button onClick={onClose} style={S.backBtn}>← Back</button>
-          <h2 style={S.headerTitle}>Schedule New Session</h2>
+        {/* HEADER — dark-mode aware */}
+        <div style={{ ...S.header, backgroundColor: sBg, borderBottom: `1px solid ${sBdr}` }}>
+          <button onClick={onClose} style={{ ...S.backBtn, color: sTxt2 }}>← Back</button>
+          <h2 style={{ ...S.headerTitle, color: sTxt }}>Schedule New Session</h2>
           <div style={S.avatar}>👨‍🏫</div>
         </div>
 
         {/* TABS */}
-        <div style={S.tabRow}>
+        <div style={{ ...S.tabRow, backgroundColor: sCard, borderBottom: `1px solid ${sBdr}` }}>
           <button
             style={{ ...S.tabBtn, ...(activeTab === 'details' ? S.tabBtnActive : {}) }}
             onClick={() => setActiveTab('details')}
@@ -235,7 +251,7 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
 
         {/* ── DRAFTS TAB ── */}
         {activeTab === 'drafts' && (
-          <div style={S.bodyOnly}>
+          <div style={{ ...S.bodyOnly, backgroundColor: sBg, color: sTxt }}>
             <h3 style={S.sectionHead}>📋 Saved Drafts</h3>
             {drafts.length === 0 ? (
               <div style={S.emptyDrafts}>No drafts saved yet. Fill in session details and click "Save Draft".</div>
@@ -264,7 +280,8 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
           <div style={S.twoCol}>
 
             {/* ═══ LEFT FORM ═══ */}
-            <div style={S.formCol}>
+            {/* eslint-disable-next-line no-undef */}
+            <div style={{ ...S.formCol, ...(document.body.classList.contains('dark-mode') ? { backgroundColor:'#1e293b', borderColor:'#334155' } : {}) }}>
               {error && <div style={S.errorBox}>{error}</div>}
 
               {/* General Information */}
@@ -272,13 +289,13 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
                 <div style={S.sectionHeader}>
                   <span style={S.sectionIcon}>📋</span>
                   <div>
-                    <div style={S.sectionTitle}>General Information</div>
-                    <div style={S.sectionSub}>The public identity of your session.</div>
+                    <div style={{ ...S.sectionTitle, ...oST }}>General Information</div>
+                    <div style={{ ...S.sectionSub, ...oSub }}>The public identity of your session.</div>
                   </div>
                 </div>
 
                 <div style={S.field}>
-                  <label style={S.label}>Session Title</label>
+                  <label style={{ ...S.label, ...oLbl }}>Session Title</label>
                   <input
                     style={S.input}
                     placeholder="e.g., Advanced Calculus - Week 4"
@@ -289,7 +306,7 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
                 </div>
 
                 <div style={S.field}>
-                  <label style={S.label}>Description <span style={S.optional}>(Optional)</span></label>
+                  <label style={{ ...S.label, ...oLbl }}>Description <span style={S.optional}>(Optional)</span></label>
                   <textarea
                     style={{ ...S.input, minHeight: 80, resize: 'vertical' }}
                     placeholder="Briefly describe the lesson goals..."
@@ -299,21 +316,21 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
                 </div>
               </div>
 
-              <div style={S.divider} />
+              <div style={{ ...S.divider, ...oDvd }} />
 
               {/* Date & Time */}
               <div style={S.section}>
                 <div style={S.sectionHeader}>
                   <span style={S.sectionIcon}>🕐</span>
                   <div>
-                    <div style={S.sectionTitle}>Date & Time</div>
-                    <div style={S.sectionSub}>When will the learning begin?</div>
+                    <div style={{ ...S.sectionTitle, ...oST }}>Date & Time</div>
+                    <div style={{ ...S.sectionSub, ...oSub }}>When will the learning begin?</div>
                   </div>
                 </div>
 
                 <div style={S.twoField}>
                   <div style={{ ...S.field, flex: 1 }}>
-                    <label style={S.label}>Scheduled Date</label>
+                    <label style={{ ...S.label, ...oLbl }}>Scheduled Date</label>
                     <input
                       style={S.input}
                       type="date"
@@ -326,7 +343,7 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
                     />
                   </div>
                   <div style={{ ...S.field, flex: 1 }}>
-                    <label style={S.label}>Start Time</label>
+                    <label style={{ ...S.label, ...oLbl }}>Start Time</label>
                     <input
                       style={S.input}
                       type="time"
@@ -339,7 +356,7 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
 
                 <div style={S.twoField}>
                   <div style={{ ...S.field, flex: 1 }}>
-                    <label style={S.label}>Duration <span style={S.optional}>(Auto)</span></label>
+                    <label style={{ ...S.label, ...oLbl }}>Duration <span style={S.optional}>(Auto)</span></label>
                     <select style={S.input} value={duration} onChange={e => setDuration(e.target.value)}>
                       {['30 Min','45 Min','1 Hour','1.5 Hours','2 Hours','3 Hours'].map(d => (
                         <option key={d}>{d}</option>
@@ -347,7 +364,7 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
                     </select>
                   </div>
                   <div style={{ ...S.field, flex: 1 }}>
-                    <label style={S.label}>End Time</label>
+                    <label style={{ ...S.label, ...oLbl }}>End Time</label>
                     <input
                       style={S.input}
                       type="time"
@@ -359,41 +376,41 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
                 </div>
               </div>
 
-              <div style={S.divider} />
+              <div style={{ ...S.divider, ...oDvd }} />
 
               {/* Access Control */}
               <div style={S.section}>
                 <div style={S.sectionHeader}>
                   <span style={S.sectionIcon}>🔒</span>
                   <div>
-                    <div style={S.sectionTitle}>Access Control</div>
-                    <div style={S.sectionSub}>Control who can join your live classroom.</div>
+                    <div style={{ ...S.sectionTitle, ...oST }}>Access Control</div>
+                    <div style={{ ...S.sectionSub, ...oSub }}>Control who can join your live classroom.</div>
                   </div>
                 </div>
 
                 <div style={S.accessRow}>
                   <button
-                    style={{ ...S.accessBtn, ...(accessType === 'public' ? S.accessBtnActive : {}) }}
+                    style={{ ...S.accessBtn, ...oAccB, ...(accessType === 'public' ? { ...S.accessBtnActive, ...oAccA } : {}) }}
                     onClick={() => setAccessType('public')}
                   >
                     <div style={S.accessIcon}>🌐</div>
-                    <div style={S.accessLabel}>Public</div>
-                    <div style={S.accessDesc}>Anyone with link</div>
+                    <div style={{ ...S.accessLabel, color: dk?'#f1f5f9':'#111827' }}>Public</div>
+                    <div style={{ ...S.accessDesc, color: dk?'#94a3b8':'#6b7280' }}>Anyone with link</div>
                   </button>
                   <button
-                    style={{ ...S.accessBtn, ...(accessType === 'private' ? S.accessBtnActive : {}) }}
+                    style={{ ...S.accessBtn, ...oAccB, ...(accessType === 'private' ? { ...S.accessBtnActive, ...oAccA } : {}) }}
                     onClick={() => setAccessType('private')}
                   >
                     <div style={S.accessIcon}>🔒</div>
-                    <div style={S.accessLabel}>Private</div>
-                    <div style={S.accessDesc}>Registered emails only</div>
+                    <div style={{ ...S.accessLabel, color: dk?'#f1f5f9':'#111827' }}>Private</div>
+                    <div style={{ ...S.accessDesc, color: dk?'#94a3b8':'#6b7280' }}>Registered emails only</div>
                   </button>
                 </div>
 
                 {/* ✅ Private: per-student email + password */}
                 {accessType === 'private' && (
-                  <div style={S.privateSection}>
-                    <div style={S.privateSectionTitle}>👥 Allowed Students</div>
+                  <div style={{ ...S.privateSection, ...oPriv }}>
+                    <div style={{ ...S.privateSectionTitle, ...oPST }}>👥 Allowed Students</div>
                     <div style={S.privateNote}>
                       💡 Enter each student's email and set a password. Only these students (with correct password) can join.
                       If an unregistered email tries to join, you will receive a notification.
@@ -419,8 +436,7 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
                         <input
                           style={{
                             ...S.input, flex: 1,
-                            // ✅ Highlight if email is filled but password is missing
-                            borderColor: s.email.trim() && !s.password.trim() ? '#ef4444' : '#d1d5db'
+                            border: `1.5px solid ${s.email.trim() && !s.password.trim() ? '#ef4444' : '#d1d5db'}`
                           }}
                           placeholder="Set password"
                           type="text"  // ✅ Use text (not password) so teacher can see what they typed
@@ -442,7 +458,7 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
 
                 {/* ✅ Custom PIN — 4 digits max */}
                 <div style={S.field}>
-                  <label style={S.label}>
+                  <label style={{ ...S.label, ...oLbl }}>
                     Custom PIN Override
                     <span style={S.optional}> (6 digits, optional)</span>
                   </label>
@@ -463,21 +479,21 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
                 </div>
               </div>
 
-              <div style={S.divider} />
+              <div style={{ ...S.divider, ...oDvd }} />
 
               {/* Reminders */}
               <div style={S.section}>
                 <div style={S.sectionHeader}>
                   <span style={S.sectionIcon}>🔔</span>
                   <div>
-                    <div style={S.sectionTitle}>Reminders & Notifications</div>
-                    <div style={S.sectionSub}>Automate attendance boosters.</div>
+                    <div style={{ ...S.sectionTitle, ...oST }}>Reminders & Notifications</div>
+                    <div style={{ ...S.sectionSub, ...oSub }}>Automate attendance boosters.</div>
                   </div>
                 </div>
 
-                <div style={S.toggleRow}>
+                <div style={{ ...S.toggleRow, backgroundColor: dk?'#0f172a':'white', borderColor: dk?'#334155':'#e5e7eb' }}>
                   <div>
-                    <div style={S.toggleLabel}>Enable Student Reminders</div>
+                    <div style={{ ...S.toggleLabel, color: dk?'#f1f5f9':'#374151' }}>Enable Student Reminders</div>
                     <div style={S.toggleSub}>Send notifications 15 min before start</div>
                   </div>
                   <button
@@ -490,7 +506,7 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
               </div>
 
               {/* Footer */}
-              <div style={S.formFooter}>
+              <div style={{ ...S.formFooter, borderTop: `1px solid ${sBdr}` }}>
                 <div style={S.footerLeft}>
                   <button style={S.cancelBtn} onClick={onClose}>Cancel</button>
                   <button style={S.draftBtn} onClick={handleSaveDraft} disabled={savingDraft}>
@@ -505,43 +521,45 @@ const ScheduleSession = ({ onClose, onSuccess }) => {
             </div>
 
             {/* ═══ RIGHT: INVITATION PREVIEW ═══ */}
-            <div style={S.previewCol}>
+            {/* eslint-disable-next-line no-undef */}
+            <div style={{ ...S.previewCol, ...(document.body.classList.contains('dark-mode') ? { backgroundColor:'#0f172a', color:'#f1f5f9' } : {}) }}>
               <div style={S.previewLabel}>INVITATION PREVIEW</div>
 
-              <div style={S.previewCard}>
+              {/* eslint-disable-next-line no-undef */}
+              <div style={{ ...S.previewCard, ...(document.body.classList.contains('dark-mode') ? { backgroundColor:'#1e293b', boxShadow:'0 4px 20px rgba(0,0,0,0.4)' } : {}) }}>
                 <div style={S.previewTopBar} />
 
                 <div style={S.previewBadge}>
                   {accessType === 'private' ? '🔒 private' : '🌐 public'}
                 </div>
 
-                <div style={S.previewTitle}>
+                <div style={{ ...S.previewTitle, color: dk?'#f1f5f9':'#111827' }}>
                   {sessionTitle || <span style={{ color:'#9ca3af' }}>Your Session Title</span>}
                 </div>
-                <div style={S.previewDate}>
+                <div style={{ ...S.previewDate, color: dk?'#94a3b8':'#6b7280', borderBottom: dk?'1px solid #334155':'1px solid #f3f4f6' }}>
                   {scheduledDate
                     ? `Scheduled for ${new Date(scheduledDate + 'T00:00:00').toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' })}`
                     : <span style={{ color:'#9ca3af' }}>Date not set</span>}
                 </div>
 
-                <div style={S.previewPinBox}>
-                  <div style={S.previewPinLabel}>SESSION PIN</div>
-                  {/* ✅ Shows 4-digit PIN */}
-                  <div style={S.previewPinValue}>
+                <div style={{ ...S.previewPinBox, backgroundColor: dk?'#0a111f':'transparent' }}>
+                  <div style={{ ...S.previewPinLabel, color: dk?'#64748b':'#9ca3af' }}>SESSION PIN</div>
+                  {/* ✅ Shows 6-digit PIN */}
+                  <div style={{ ...S.previewPinValue, color: dk?'#818cf8':'#111827' }}>
                     {customPin.length === 6 ? customPin : previewPin}
                   </div>
                 </div>
 
                 {startTime && (
-                  <div style={S.previewMeta}>🕐 Starts at {formatDisplayTime(startTime)}</div>
+                  <div style={{ ...S.previewMeta, color: dk?'#94a3b8':'#6b7280' }}>🕐 Starts at {formatDisplayTime(startTime)}</div>
                 )}
-                <div style={S.previewMeta}>
+                <div style={{ ...S.previewMeta, color: dk?'#94a3b8':'#6b7280' }}>
                   {accessType === 'private'
                     ? `👥 Limited to ${allowedStudents.filter(s => s.email).length} registered student(s)`
                     : '👥 Open to anyone with the PIN'}
                 </div>
 
-                <div style={S.previewNote}>
+                <div style={{ ...S.previewNote, color: dk?'#94a3b8':'#9ca3af', borderTop: dk?'1px solid #334155':'1px solid #f3f4f6' }}>
                   Students can join by entering the PIN at classvibe.app/join
                 </div>
 
@@ -603,7 +621,7 @@ const S = {
   input:{ width:'100%', padding:'10px 12px', fontSize:'14px', border:'1.5px solid #d1d5db', borderRadius:'8px', outline:'none', fontFamily:'inherit', backgroundColor:'white', boxSizing:'border-box' },
   accessRow:{ display:'flex', gap:'12px', marginBottom:'16px' },
   accessBtn:{ flex:1, padding:'16px', border:'2px solid #e5e7eb', borderRadius:'10px', background:'white', cursor:'pointer', textAlign:'center', transition:'all 0.2s' },
-  accessBtnActive:{ borderColor:'#4F46E5', backgroundColor:'#EEF2FF' },
+  accessBtnActive:{ border:'2px solid #4F46E5', background:'#EEF2FF' },
   accessIcon:{ fontSize:'24px', marginBottom:'6px' },
   accessLabel:{ fontWeight:'700', fontSize:'14px', color:'#111827' },
   accessDesc:{ fontSize:'12px', color:'#6b7280', marginTop:'2px' },
